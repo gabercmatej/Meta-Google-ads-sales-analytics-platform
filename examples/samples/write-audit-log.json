@@ -1,0 +1,108 @@
+{
+  "label": "DEMO DATA — NOT REAL BUSINESS RESULTS",
+  "note": "AI draft, then human confirmation, one simulated write, read-back, audit log. No real platform is involved.",
+  "proposal": {
+    "id": "proposal-0001",
+    "platform": "meta",
+    "accountId": "meta-demo-account",
+    "operation": {
+      "type": "pause",
+      "entityType": "campaign",
+      "entityId": "meta-c1"
+    },
+    "origin": "ai",
+    "createdBy": "assistant",
+    "createdAt": "2026-01-01T09:00:00.000Z",
+    "status": "verified",
+    "preview": {
+      "before": {
+        "id": "meta-c1",
+        "type": "campaign",
+        "name": "Demo campaign",
+        "status": "ACTIVE",
+        "dailyBudgetMinor": 5500
+      },
+      "after": {
+        "status": "PAUSED"
+      },
+      "summary": "Pause campaign meta-c1"
+    },
+    "validation": {
+      "ok": true,
+      "issues": []
+    },
+    "confirmedBy": "demo-editor",
+    "confirmedAt": "2026-01-01T09:00:04.000Z",
+    "execution": {
+      "mode": "live",
+      "entityId": "meta-c1",
+      "readBack": {
+        "id": "meta-c1",
+        "type": "campaign",
+        "name": "Demo campaign",
+        "status": "PAUSED",
+        "dailyBudgetMinor": 5500
+      },
+      "verified": true
+    }
+  },
+  "auditLog": [
+    {
+      "seq": 1,
+      "at": "2026-01-01T09:00:01.000Z",
+      "proposalId": "proposal-0001",
+      "action": "created",
+      "actorId": "assistant",
+      "platform": "meta",
+      "accountId": "meta-demo-account",
+      "detail": "origin=ai"
+    },
+    {
+      "seq": 2,
+      "at": "2026-01-01T09:00:02.000Z",
+      "proposalId": "proposal-0001",
+      "action": "previewed",
+      "actorId": "system",
+      "platform": "meta",
+      "accountId": "meta-demo-account",
+      "detail": "Pause campaign meta-c1"
+    },
+    {
+      "seq": 3,
+      "at": "2026-01-01T09:00:03.000Z",
+      "proposalId": "proposal-0001",
+      "action": "validated",
+      "actorId": "system",
+      "platform": "meta",
+      "accountId": "meta-demo-account"
+    },
+    {
+      "seq": 4,
+      "at": "2026-01-01T09:00:05.000Z",
+      "proposalId": "proposal-0001",
+      "action": "confirmed",
+      "actorId": "demo-editor",
+      "platform": "meta",
+      "accountId": "meta-demo-account"
+    },
+    {
+      "seq": 5,
+      "at": "2026-01-01T09:00:06.000Z",
+      "proposalId": "proposal-0001",
+      "action": "executed",
+      "actorId": "demo-editor",
+      "platform": "meta",
+      "accountId": "meta-demo-account",
+      "detail": "entity meta-c1"
+    },
+    {
+      "seq": 6,
+      "at": "2026-01-01T09:00:07.000Z",
+      "proposalId": "proposal-0001",
+      "action": "verified",
+      "actorId": "system",
+      "platform": "meta",
+      "accountId": "meta-demo-account"
+    }
+  ]
+}

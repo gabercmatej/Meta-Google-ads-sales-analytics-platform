@@ -1,0 +1,40 @@
+{
+  "label": "DEMO DATA — NOT REAL BUSINESS RESULTS",
+  "note": "Only orders with hard evidence enter the numerator.",
+  "range": {
+    "start": "2025-11-01",
+    "end": "2025-11-30"
+  },
+  "report": {
+    "platforms": [
+      {
+        "platform": "meta",
+        "attributedOrders": 61,
+        "attributedRevenueMinor": 761900,
+        "spendMinor": 373291,
+        "roas": 2.041035010219909
+      },
+      {
+        "platform": "google",
+        "attributedOrders": 77,
+        "attributedRevenueMinor": 909300,
+        "spendMinor": 199798,
+        "roas": 4.551096607573649
+      }
+    ],
+    "notAttributed": {
+      "sourceOnly": {
+        "orders": 207,
+        "revenueMinor": 2659300
+      },
+      "unknown": {
+        "orders": 101,
+        "revenueMinor": 1287900
+      },
+      "conflict": {
+        "orders": 3,
+        "revenueMinor": 17700
+      }
+    }
+  }
+}

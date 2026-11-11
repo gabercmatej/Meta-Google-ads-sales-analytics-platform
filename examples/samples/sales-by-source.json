@@ -1,0 +1,70 @@
+{
+  "label": "DEMO DATA — NOT REAL BUSINESS RESULTS",
+  "note": "Paid orders. Parts sum to the total; the selected subtotal is a subset.",
+  "range": {
+    "start": "2025-11-01",
+    "end": "2025-11-30"
+  },
+  "partition": {
+    "basis": "order",
+    "range": {
+      "start": "2025-11-01",
+      "end": "2025-11-30"
+    },
+    "eligibleOrders": 449,
+    "eligibleRevenueMinor": 5636100,
+    "parts": [
+      {
+        "source": "meta",
+        "orders": 109,
+        "revenueMinor": 1406100
+      },
+      {
+        "source": "google",
+        "orders": 134,
+        "revenueMinor": 1486600
+      },
+      {
+        "source": "chatbot_ai",
+        "orders": 37,
+        "revenueMinor": 473300
+      },
+      {
+        "source": "partner_portal",
+        "orders": 39,
+        "revenueMinor": 586100
+      },
+      {
+        "source": "other_verified",
+        "orders": 26,
+        "revenueMinor": 378400
+      },
+      {
+        "source": "unknown",
+        "orders": 101,
+        "revenueMinor": 1287900
+      },
+      {
+        "source": "conflicting",
+        "orders": 3,
+        "revenueMinor": 17700
+      }
+    ],
+    "reconciles": true,
+    "selected": {
+      "sources": [
+        "meta",
+        "google",
+        "chatbot_ai"
+      ],
+      "orders": 280,
+      "revenueMinor": 3366000
+    },
+    "excluded": {
+      "duplicateIds": 0,
+      "missingPaymentDate": 0,
+      "notPaid": 159
+    },
+    "remappedToFallback": 0
+  }
+}

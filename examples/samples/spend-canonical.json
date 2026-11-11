@@ -1,0 +1,244 @@
+{
+  "label": "DEMO DATA — NOT REAL BUSINESS RESULTS",
+  "note": "Amounts are integer minor units (cents). Total counts only days where both platforms have data.",
+  "range": {
+    "start": "2025-11-01",
+    "end": "2025-11-30"
+  },
+  "spend": {
+    "range": {
+      "start": "2025-11-01",
+      "end": "2025-11-30"
+    },
+    "days": [
+      {
+        "date": "2025-11-01",
+        "metaMinor": 9545,
+        "googleMinor": 4974,
+        "totalMinor": 14519,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-02",
+        "metaMinor": 9145,
+        "googleMinor": 4630,
+        "totalMinor": 13775,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-03",
+        "metaMinor": 15481,
+        "googleMinor": 7901,
+        "totalMinor": 23382,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-04",
+        "metaMinor": 14840,
+        "googleMinor": 7601,
+        "totalMinor": 22441,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-05",
+        "metaMinor": 14139,
+        "googleMinor": 7490,
+        "totalMinor": 21629,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-06",
+        "metaMinor": 13884,
+        "googleMinor": 7714,
+        "totalMinor": 21598,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-07",
+        "metaMinor": 12722,
+        "googleMinor": 6572,
+        "totalMinor": 19294,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-08",
+        "metaMinor": 9626,
+        "googleMinor": 5048,
+        "totalMinor": 14674,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-09",
+        "metaMinor": 8676,
+        "googleMinor": 4592,
+        "totalMinor": 13268,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-10",
+        "metaMinor": 14644,
+        "googleMinor": 7875,
+        "totalMinor": 22519,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-11",
+        "metaMinor": 14515,
+        "googleMinor": 7552,
+        "totalMinor": 22067,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-12",
+        "metaMinor": 13484,
+        "googleMinor": 7662,
+        "totalMinor": 21146,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-13",
+        "metaMinor": 14432,
+        "googleMinor": 7617,
+        "totalMinor": 22049,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-14",
+        "metaMinor": 12732,
+        "googleMinor": 6707,
+        "totalMinor": 19439,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-15",
+        "metaMinor": 9557,
+        "googleMinor": 5142,
+        "totalMinor": 14699,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-16",
+        "metaMinor": 8912,
+        "googleMinor": 4670,
+        "totalMinor": 13582,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-17",
+        "metaMinor": 14850,
+        "googleMinor": 7894,
+        "totalMinor": 22744,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-18",
+        "metaMinor": 15000,
+        "googleMinor": 7738,
+        "totalMinor": 22738,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-19",
+        "metaMinor": 13715,
+        "googleMinor": 7729,
+        "totalMinor": 21444,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-20",
+        "metaMinor": 14713,
+        "googleMinor": 7835,
+        "totalMinor": 22548,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-21",
+        "metaMinor": 12574,
+        "googleMinor": 6984,
+        "totalMinor": 19558,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-22",
+        "metaMinor": 9354,
+        "googleMinor": 5151,
+        "totalMinor": 14505,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-23",
+        "metaMinor": 8892,
+        "googleMinor": 4684,
+        "totalMinor": 13576,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-24",
+        "metaMinor": 14726,
+        "googleMinor": 7986,
+        "totalMinor": 22712,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-25",
+        "metaMinor": 14841,
+        "googleMinor": 7887,
+        "totalMinor": 22728,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-26",
+        "metaMinor": 13862,
+        "googleMinor": 7675,
+        "totalMinor": 21537,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-27",
+        "metaMinor": 13945,
+        "googleMinor": 7907,
+        "totalMinor": 21852,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-28",
+        "metaMinor": 12593,
+        "googleMinor": 7055,
+        "totalMinor": 19648,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-29",
+        "metaMinor": 9211,
+        "googleMinor": 5038,
+        "totalMinor": 14249,
+        "status": "complete"
+      },
+      {
+        "date": "2025-11-30",
+        "metaMinor": 8681,
+        "googleMinor": 4488,
+        "totalMinor": 13169,
+        "status": "complete"
+      }
+    ],
+    "metaMinor": 373291,
+    "googleMinor": 199798,
+    "totalMinor": 573089,
+    "completeDays": 30,
+    "expectedDays": 30,
+    "missingDates": [],
+    "partial": false
+  },
+  "monthly": [
+    {
+      "month": "2025-11",
+      "metaMinor": 373291,
+      "googleMinor": 199798,
+      "totalMinor": 573089,
+      "completeDays": 30,
+      "expectedDays": 30,
+      "partial": false
+    }
+  ]
+}

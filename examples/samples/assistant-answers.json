@@ -1,0 +1,66 @@
+{
+  "label": "DEMO DATA — NOT REAL BUSINESS RESULTS",
+  "note": "Deterministic, LLM-free. Every number in an answer is checked against the tool facts.",
+  "answers": [
+    {
+      "question": "How much did we spend in total in the last 30 days?",
+      "intent": "spend_breakdown",
+      "toolCalls": [
+        {
+          "name": "spend_breakdown",
+          "input": {
+            "period": {
+              "preset": "last30"
+            }
+          }
+        }
+      ],
+      "text": "Spend breakdown (the total only counts days where both platforms have data) (2025-12-02 to 2025-12-31, days with data on both platforms):\n- Meta spend: €3,197.77\n- Google spend: €1,722.95\n- Total spend: €4,920.72\n- Complete days: 30\n- Days in period: 30",
+      "grounded": true
+    },
+    {
+      "question": "Which campaign has the lowest CPL in the last 90 days?",
+      "intent": "top_entities",
+      "toolCalls": [
+        {
+          "name": "top_entities",
+          "input": {
+            "period": {
+              "preset": "last90"
+            },
+            "platform": "all",
+            "level": "campaign",
+            "metric": "cpl",
+            "direction": "best",
+            "limit": 3
+          }
+        }
+      ],
+      "text": "Here is the ranking (all, 2025-10-03 to 2025-12-31, completed days):\n- Google | Search - Brand Terms cpl: €1.59\n- Meta | Retargeting - Site Visitors cpl: €4.99\n- Google | Search - Core Services cpl: €6.93",
+      "grounded": true
+    },
+    {
+      "question": "What is the ROAS for the last 90 days?",
+      "intent": "attributable_roas",
+      "toolCalls": [
+        {
+          "name": "attributable_roas",
+          "input": {
+            "period": {
+              "preset": "last90"
+            }
+          }
+        }
+      ],
+      "text": "Attributable ROAS counts only orders with hard evidence of a paid ad. Label-only and unknown orders are excluded (2025-10-03 to 2025-12-31, order-date basis; revenue only from orders with hard evidence (verified lead match or click id)):\n- meta attributed revenue: €23,894.00\n- meta attributed orders: 196\n- meta spend: €10,605.80\n- meta attributable ROAS: 2.25x\n- google attributed revenue: €22,791.00\n- google attributed orders: 199\n- google spend: €5,677.94\n- google attributable ROAS: 4.01x\n- Label-only revenue (not in ROAS): €63,454.00\n- Unknown-source revenue (not in ROAS): €30,622.00",
+      "grounded": true
+    },
+    {
+      "question": "Who is my biggest customer?",
+      "intent": "unsupported",
+      "toolCalls": [],
+      "text": "I can answer questions about KPIs, period comparisons, campaign or ad rankings, sales by source, attributable ROAS and spend. I will not guess beyond those tools.",
+      "grounded": true
+    }
+  ]
+}

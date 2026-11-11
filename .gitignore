@@ -1,0 +1,48 @@
+# dependencies and build output
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# secrets and local configuration: never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+scripts/privacy-blocklist.local.json
+
+# logs, caches, temp
+*.log
+npm-debug.log*
+.cache/
+.tmp/
+tmp/
+.vitest/
+
+# editors and operating systems
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+
+# private material that must never be part of the showcase
+*.sql
+*.dump
+*.sqlite
+*.sqlite3
+*.zip
+*.tgz
+*.tar.gz
+*.xlsx
+*.xls
+*.csv
+!examples/**/*.csv

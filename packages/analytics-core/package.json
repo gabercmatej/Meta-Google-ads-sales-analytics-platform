@@ -1,0 +1,28 @@
+{
+  "name": "@sedem-ads/analytics-core",
+  "version": "0.1.0",
+  "description": "Independent reference implementation of marketing-analytics primitives for the Sedem Ads showcase. Not production source.",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json",
+    "example": "npm run build && node ../../examples/quickstart.mjs"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}

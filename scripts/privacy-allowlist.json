@@ -1,0 +1,74 @@
+{
+  "_comment": "Allowlist and hashed blocklist for scripts/privacy-scan.mjs. Blocklist entries are SHA-256 hashes of lowercase ASCII tokens (add one with: node scripts/privacy-scan.mjs --hash <word>), so the protected names are not published here. Add plain-text extras locally in the git-ignored scripts/privacy-blocklist.local.json.",
+  "emailDomains": [
+    "example.com",
+    "example.org",
+    "example.net",
+    "users.noreply.github.com"
+  ],
+  "hosts": [
+    "example.com",
+    "example.org",
+    "example.net",
+    "localhost",
+    "github.com",
+    "githubusercontent.com",
+    "shields.io",
+    "nodejs.org",
+    "npmjs.com",
+    "npmjs.org",
+    "typescriptlang.org",
+    "vitest.dev",
+    "mermaid.js.org",
+    "keepachangelog.com",
+    "opensource.org",
+    "w3.org",
+    "developers.facebook.com",
+    "developers.google.com",
+    "ads.google.com"
+  ],
+  "ignoredPaths": [
+    "node_modules",
+    "dist",
+    "package-lock.json",
+    "assets/fonts"
+  ],
+  "findings": [
+    {
+      "file": "scripts/privacy-scan.mjs",
+      "rule": "server-path",
+      "reason": "the rule patterns themselves"
+    },
+    {
+      "file": "scripts/privacy-scan.mjs",
+      "rule": "deploy-fingerprint",
+      "reason": "the rule patterns themselves"
+    },
+    {
+      "file": "scripts/privacy-scan.test.mjs",
+      "rule": "*",
+      "reason": "deliberately fake fixtures for every rule"
+    },
+    {
+      "file": "NOTICE.md",
+      "rule": "blocklist",
+      "reason": "the client and an integration are named on purpose in the notice"
+    }
+  ],
+  "blocklistHashes": [
+    "4ab10751d6af71be0b9fd693a2719a3baa65f24cf150c10fc5218649a20e6e53",
+    "5ae11e47c63a6c72a419ea113a90ed31c36b6edd40bb7401b0bab93187c81e12",
+    "298343ca6d4934f16f32cba169902d02d6f2da35568b113a984c7841cb7ada54",
+    "dbd5aa863434c60837c850d14aa4ec61ab04c383078cd7aa9cf699314f71ab73",
+    "294aa8d75483b8331e3ba6a7f24aea15202747f36de65197e7bc6194880b2558",
+    "b0e91ff3701a60711b003bd7ddc45fad5be04670caeae8b75922e101851084bd",
+    "9790b8f4a5994bc873370e0d26fe4364543e14d155bd4e18e29a25a2478b665f",
+    "cfe79b2740e9cb400daee008d0394de2fb7ee1a551970c42d08900d3db7493d7",
+    "9231e4d245c169d2c64898c732ad6f0b358558821b347c9e96fe9fa799efdfb7",
+    "fefaa42da40ecf93662a6f2852c1d4315ff7593420cd3538f6eaf6afee38f1a2",
+    "8971ee93249581a7a6dcd9f8fe3c10987ff4e4c90ff180bf833a5f2a30f3a2c0",
+    "15948510e0dfdd517e0394fa570bc541d9bbc611ba14da3c750897f7176fc300",
+    "9fe8d16d3b3c2edd5c91e244b07a297b7c1f6668af80d76e98c2376db35b4ac5",
+    "efe1fa12b5ec12bd9ec29b86456dca0bf3479a12ace67cf57db7235dc5cf2109"
+  ]
+}
