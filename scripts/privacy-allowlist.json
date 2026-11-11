@@ -11,6 +11,8 @@
     "example.org",
     "example.net",
     "localhost",
+    "127.0.0.1",
+    "test",
     "github.com",
     "githubusercontent.com",
     "shields.io",

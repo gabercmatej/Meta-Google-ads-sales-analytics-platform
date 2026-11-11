@@ -1,14 +1,16 @@
 # Screenshot plan
 
-## Status: Phase 1 publishes no screenshots
+## Status: implemented in Phase 2
 
-Phase 1 of this showcase contains **no screenshots of any kind**. Reasons:
+The 12 published screenshots in `assets/screenshots/` were captured by `SCREENSHOTS=<dir> node scripts/browser-test.mjs` from the locally built demo (desktop 1440 x 900 and phone 390 x 844, both at device pixel ratio 2, reduced motion, light scheme). They were then re-encoded so each PNG holds only `IHDR`, `IDAT` and `IEND` chunks, and the repository privacy scan passed over the result. The same run fails on any external request, console error or CSP violation.
+
+The rules below were written in Phase 1, when **no screenshots of any kind** were published, for these reasons:
 
 1. No synthetic environment exists yet. The only running version of the product is the private production app, whose screens contain real company data (campaign names, spend, orders, customers).
 2. Redacting real screenshots is not an acceptable substitute. Blurring leaves layout fingerprints, metadata and partial text.
 3. The Phase 2 browser demo (see `demo-plan.md`) will render only synthetic data. All published screenshots will be captured from that demo.
 
-Until Phase 2 is complete, the README should describe screens in words and link to diagrams only.
+Phase 1 therefore described screens in words and linked to diagrams only.
 
 ## Capture rules (all shots)
 

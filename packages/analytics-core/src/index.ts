@@ -13,3 +13,6 @@ export * from './write-safety.js';
 export * from './assistant/tools.js';
 export * from './assistant/answer.js';
 export * from './synthetic/generate.js';
+export * from './showcase/types.js';
+export * from './showcase/generate.js';
+export * from './showcase/queries.js';

@@ -4,8 +4,13 @@
   "private": true,
   "description": "Public portfolio showcase: independent reference implementation, synthetic demo data, documentation.",
   "type": "module",
-  "workspaces": ["packages/*"],
-  "engines": { "node": ">=22" },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "typecheck": "npm run typecheck -w packages/analytics-core",
     "build": "npm run build -w packages/analytics-core",
@@ -15,6 +20,15 @@
     "privacy-scan": "node scripts/privacy-scan.mjs",
     "privacy-scan:history": "node scripts/privacy-scan.mjs --git-history",
     "test:scripts": "node --test scripts/privacy-scan.test.mjs",
-    "verify": "npm run typecheck && npm run build && npm test && node examples/quickstart.mjs && npm run privacy-scan && npm run test:scripts"
+    "verify": "npm run typecheck && npm run build && npm test && node examples/quickstart.mjs && npm run typecheck:demo && npm run test:demo && npm run build:demo && npm run bundle-budget && npm run test:browser && npm run privacy-scan && npm run test:scripts",
+    "build:demo": "npm run build -w apps/demo",
+    "typecheck:demo": "npm run typecheck -w apps/demo",
+    "test:demo": "npm run test -w apps/demo",
+    "dev:demo": "npm run dev -w apps/demo",
+    "test:browser": "node scripts/browser-test.mjs",
+    "bundle-budget": "node scripts/bundle-budget.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.56.1"
   }
 }

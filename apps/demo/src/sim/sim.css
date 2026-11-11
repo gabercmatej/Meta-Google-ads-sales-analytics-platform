@@ -1,0 +1,20 @@
+.entity-actions { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.sim-dialog { display: grid; gap: 12px; }
+.sim-dialog-meta { margin: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sim-dialog .muted, .muted { color: var(--text-3); font-size: 12.5px; }
+.sim-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; counter-reset: step; }
+.sim-steps li { counter-increment: step; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-3); }
+.sim-steps li::before { content: counter(step) '. '; }
+.sim-steps li[data-done='true'] { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.sim-field { display: grid; gap: 4px; }
+.sim-field label { font-weight: 600; font-size: 13px; }
+.sim-field input, .sim-field textarea, .sim-field select { font: inherit; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); color: var(--text); min-height: 38px; width: 100%; }
+.sim-field input[aria-invalid='true'], .sim-field textarea[aria-invalid='true'] { border-color: var(--bad); }
+.sim-field .field-error { color: var(--bad); font-size: 12.5px; }
+.sim-diff { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sim-diff th, .sim-diff td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+.sim-ok { color: var(--good); margin: 0; font-weight: 550; }
+.sim-issues { margin: 0; padding: 10px 12px 10px 28px; background: var(--bad-soft); color: var(--bad); border-radius: 10px; }
+.sim-result { padding: 12px; border-radius: 10px; display: grid; gap: 4px; }
+.sim-result-ok { background: var(--good-soft); color: var(--text); }
+.sim-result-bad { background: var(--bad-soft); color: var(--text); }

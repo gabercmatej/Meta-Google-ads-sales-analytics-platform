@@ -1,0 +1,17 @@
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(188px, 1fr)); gap: 12px; }
+.kpi { display: grid; gap: 3px; align-content: start; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; min-width: 0; font: inherit; color: inherit; }
+.kpi-click { cursor: pointer; }
+.kpi-click:hover { border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(16, 24, 40, 0.1); }
+.kpi-label { color: var(--text-3); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.kpi-value { font-size: 24px; font-weight: 680; letter-spacing: -0.02em; line-height: 1.15; overflow-wrap: anywhere; }
+.kpi-value.neg { color: var(--bad); }
+.kpi-change { font-size: 12.5px; color: var(--text-3); }
+.kpi-change.up { color: var(--good); }
+.kpi-change.down { color: var(--bad); }
+.kpi-vs { color: var(--text-3); }
+.kpi-sub { font-size: 12px; color: var(--text-3); }
+@media (max-width: 520px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi { padding: 12px; }
+  .kpi-value { font-size: 20px; }
+}

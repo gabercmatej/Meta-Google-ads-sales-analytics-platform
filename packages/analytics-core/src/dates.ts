@@ -45,16 +45,19 @@ function fromUtcMs(ms: number): ISODate {
 
 const DAY_MS = 86_400_000;
 
+// Intl.DateTimeFormat construction is expensive; one formatter per zone is reused.
+const dayFormatters = new Map<string, Intl.DateTimeFormat>();
+
 /** Calendar day of a UTC instant in the given IANA time zone. */
 export function calendarDateInZone(instant: Date | number | string, timeZone: string): ISODate {
   const d = instant instanceof Date ? instant : new Date(instant);
   if (Number.isNaN(d.getTime())) throw new RangeError('Invalid instant');
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d);
+  let fmt = dayFormatters.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+    dayFormatters.set(timeZone, fmt);
+  }
+  const parts = fmt.formatToParts(d);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
   return `${get('year')}-${get('month')}-${get('day')}`;
 }

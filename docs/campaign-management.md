@@ -19,7 +19,7 @@ See also [`diagrams/campaign-action-controls.md`](../diagrams/campaign-action-co
 | Google: rename, pause/enable, daily budget, keyword add, ad text, create paused search campaign | **Validate-only** | Requests are built, diffed and sent as validate-only. No live Google mutation is enabled or verified |
 | Google: removal, bidding strategy changes, shared budget edits, Performance Max and other automated types, offline conversion upload | Not offered | Out of scope by design |
 | AI assistant: change anything | Not possible | Can only create a local draft or a structured proposal |
-| Demo mode: simulated writes | Planned | A future public demo would use mock adapters and clearly labelled synthetic data |
+| Demo mode: simulated writes | Available | The public demo (`apps/demo`) runs the same flow on local state: PAUSED creates, Google validate-only, activity log, reset |
 | Roadmap | See the README | No dates |
 
 "Live under scoped rules" means implemented and used in production behind all of the controls below, not "any user can change any campaign".

@@ -1,0 +1,32 @@
+.adp { background: #fff; border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; width: 100%; max-width: 360px; font-size: 13px; color: #111827; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.adp-sm { max-width: 240px; font-size: 11px; }
+.adp-body { padding: 10px; display: grid; gap: 8px; }
+.adp-sm .adp-body { padding: 8px; gap: 6px; }
+.adp-foot { margin-top: auto; padding: 3px 10px; font-size: 10px; color: var(--text-3); background: var(--surface-2); border-top: 1px solid var(--border); }
+.adp-meta-head { display: flex; align-items: center; gap: 8px; }
+.adp-avatar { width: 30px; height: 30px; border-radius: 50%; flex: none; }
+.adp-sm .adp-avatar { width: 22px; height: 22px; }
+.adp-brand { font-weight: 650; line-height: 1.2; }
+.adp-sponsored { color: var(--text-3); font-size: 11px; }
+.adp-text { margin: 0; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-clamp: 3; }
+.adp-sm .adp-text { -webkit-line-clamp: 2; line-clamp: 2; }
+.adp-visual { position: relative; width: 100%; border-radius: 8px; overflow: hidden; }
+.adp-visual-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.adp-visual-text { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 10px; display: grid; gap: 1px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.28)); color: #fff; }
+.adp-visual-text strong { font-size: 1.12em; line-height: 1.2; }
+.adp-visual-text span { font-size: 0.9em; opacity: 0.92; }
+.adp-visual-text:empty { display: none; }
+.adp-carousel { display: grid; grid-template-columns: repeat(3, 62%); gap: 6px; overflow: hidden; }
+.adp-cta-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface-2); border-radius: 8px; padding: 7px 9px; }
+.adp-cta-text { display: grid; min-width: 0; }
+.adp-cta-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adp-host { font-size: 10px; color: var(--text-3); letter-spacing: 0.03em; }
+.adp-cta-btn { background: #e5e7eb; border-radius: 6px; padding: 5px 9px; font-weight: 650; white-space: nowrap; font-size: 0.95em; }
+.adp-cta-inline { justify-self: start; background: #1a56db; color: #fff; }
+.adp-search-url { color: #374151; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.adp-ad-tag { font-weight: 700; color: #111827; }
+.adp-chip { font-size: 10px; background: var(--google-soft); color: #92400e; border-radius: 999px; padding: 1px 7px; }
+.adp-search-heads { color: #1a0dab; font-size: 1.25em; line-height: 1.25; font-weight: 500; }
+.adp-search-desc { margin: 0; color: #4b5563; line-height: 1.35; }
+.adp-pmax { display: grid; grid-template-columns: 1.4fr 1fr; gap: 6px; }
+.adp-pmax-side { display: grid; gap: 6px; align-content: start; }

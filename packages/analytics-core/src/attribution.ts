@@ -43,10 +43,6 @@ export type AttributionResult =
   | (ResultBase & { status: 'unknown' })
   | (ResultBase & { status: 'conflict'; platforms: AdPlatform[] });
 
-function isHard(e: Evidence): e is Extract<Evidence, { kind: 'verified_lead_match' | 'click_id' }> {
-  return e.kind === 'verified_lead_match' || e.kind === 'click_id';
-}
-
 /** Label -> platform it names, if any. Used only to flag disagreement and for classification. */
 export function platformNamedByLabel(label: string): AdPlatform | null {
   const l = label.trim().toLowerCase();

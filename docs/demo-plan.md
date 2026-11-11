@@ -1,6 +1,6 @@
 # Phase 2 plan: public browser demo
 
-Status: plan only. Nothing in this document is built in Phase 1. Companion documents: `product-tour.md` (what to port), `localization-glossary.md` (English strings and formatting), `screenshot-plan.md` (capture rules).
+Status: **implemented** in `apps/demo/` (Phase 2). This document is kept as the original plan; where the build differs, the code and the README are authoritative. Notable differences: the assistant covers 22 topics plus an honest unsupported path, Ad Comparison and AI Recommendations were added as pages, and 12 screenshots are published. Companion documents: `product-tour.md` (what to port), `localization-glossary.md` (English strings and formatting), `screenshot-plan.md` (capture rules).
 
 ## 1. Goals
 

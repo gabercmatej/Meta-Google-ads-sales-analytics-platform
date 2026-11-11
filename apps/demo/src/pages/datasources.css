@@ -1,0 +1,17 @@
+.src-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .src-grid { grid-template-columns: minmax(0, 1fr); } }
+.src-card .card-head { align-items: flex-start; }
+.src-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0 0 12px; }
+.src-facts dt { font-size: 12px; color: var(--text-3); }
+.src-facts dd { margin: 2px 0 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.src-sub { margin: 0 0 6px; font-size: 12px; font-weight: 650; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.gap-list, .check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.gap-list li { display: grid; gap: 2px; }
+.gap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.check { display: flex; gap: 10px; align-items: flex-start; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.check:last-child { border-bottom: 0; padding-bottom: 0; }
+.check .badge { flex: none; min-width: 64px; justify-content: center; }
+.check-body { min-width: 0; }
+.check-body p { margin: 2px 0 0; }
+.check-legend { margin-top: 12px; }
+.small { font-size: 12.5px; margin: 0; }

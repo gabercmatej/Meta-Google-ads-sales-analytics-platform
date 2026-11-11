@@ -39,6 +39,16 @@ jobs:
         run: |
           node examples/generate-samples.mjs
           git diff --exit-code -- examples/samples
+      - name: Demo typecheck
+        run: npm run typecheck:demo
+      - name: Demo unit tests
+        run: npm run test:demo
+      - name: Demo build
+        run: npm run build:demo
+      - name: Demo bundle budget (initial JS <= 250 kB gzip)
+        run: node scripts/bundle-budget.mjs
+      - name: Demo browser tests (desktop + phone, production headers, no network)
+        run: npm run test:browser
       - name: Privacy scan script tests
         run: npm run test:scripts
       - name: Privacy scan, working tree

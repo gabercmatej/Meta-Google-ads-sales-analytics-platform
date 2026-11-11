@@ -2,112 +2,154 @@
 
 # Meta & Google Ads Sales Analytics Platform
 
-**A grounded AI assistant, reconciled cross-platform analytics and human-confirmed campaign controls for Meta and Google Ads, with sales attribution that refuses to overclaim.**
+*AI-powered advertising intelligence, campaign management and verified-sales analytics.*
 
 Every number traces to a source. Missing data is never zero. The AI can analyse and draft, never write.
 
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-App_Router-000000?logo=nextdotjs&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
-![Vitest](https://img.shields.io/badge/Vitest-tests-6E9F18?logo=vitest&logoColor=white)
-![Meta Marketing API](https://img.shields.io/badge/Meta_Marketing_API-0866FF?logo=meta&logoColor=white)
-![Google Ads API](https://img.shields.io/badge/Google_Ads_API-4285F4?logo=googleads&logoColor=white)
-
-[Architecture](#architecture) · [Features](#features) · [AI Assistant](#ai-assistant) · [Data Integrity](#operations-and-data-integrity) · [Engineering](#engineering-highlights) · [Demo](#roadmap)
-
-<!-- PHASE 2: ▶ Try the Interactive Demo link + hero screenshot go here -->
+[Interactive demo](#interactive-demo) · [AI Assistant](#ai-assistant) · [Ad Comparison](#ad-comparison) · [Analytics and BI](#analytics-and-bi) · [Engineering](#engineering) · [Architecture](#architecture)
 
 </div>
 
-## Status
+![Overview dashboard of the interactive demo: spend, leads, paid orders, revenue, attributable ROAS and advertising surplus for Meta and Google combined](assets/screenshots/overview.png)
 
-| | |
-|---|---|
-| **Status** | In production for one company (a Slovenian legal-services business) |
-| **Meta write** | Live under scoped rules: separate token, allow-listed accounts, editor/admin role, preview, confirmation, read-back, audit log |
-| **Google write** | Validate-only. Live Google mutations are not enabled or verified |
-| **AI** | Hosted model used through read-only tools, not fine-tuned. No write path |
-| **Tests (private)** | 195 test files / 2,096 tests at V4.6. Private repository, not runnable here |
-| **Tests (this repo)** | 189 tests for the reference library + 22 for the privacy scanner, run in CI |
+<sub>Screenshot of the interactive demo. **DEMO DATA — NOT REAL BUSINESS RESULTS.** Fictional company, synthetic deterministic dataset.</sub>
 
 ## What this repository is
 
-> This repository is a **case study** of a private production system, plus an **independent reference library** (`packages/analytics-core`) that re-implements its core rules with **synthetic examples only**. It contains **no production source code, prompts, data or screenshots**. See [WHATS_PUBLIC.md](WHATS_PUBLIC.md) for exactly what is and is not here, and [NOTICE.md](NOTICE.md) for terms.
+> A **case study** of a private production system used by one company, plus an **independent reference library** (`packages/analytics-core`) and an **interactive demo** (`apps/demo`) that re-implement its core rules on **synthetic data only**. It contains **no production source code, prompts, data or screenshots**. See [WHATS_PUBLIC.md](WHATS_PUBLIC.md) for exactly what is and is not here, and [NOTICE.md](NOTICE.md) for terms.
 
-## What makes this different
+| | Production system (private) | This repository (public) |
+|---|---|---|
+| **Data** | Meta, Google Ads, sales backend, Excel, Stripe | Synthetic, deterministic, 12+ months to 11 Nov 2026 |
+| **AI** | Hosted model through read-only tools (not fine-tuned) | Deterministic intent router + the same kind of read-only tools, in the browser |
+| **Meta writes** | Live under scoped rules | Simulated in browser state only |
+| **Google writes** | Validate-only | Validate-only (simulated) |
+| **Tests** | 2,096 tests (private, not runnable here) | 217 library + 89 demo + 22 scanner tests, 161 browser checks |
 
-- **It says "no data" instead of 0.** Coverage comes from successful syncs; an API error is never zero spend.
-- **One number per thing.** Spend, ROAS and totals come from one canonical path, so card, chart, monthly view and PDF agree.
-- **Attribution that does not overclaim.** A "Google" label on a customer is not a Google paid-ad sale; unknown is not "organic"; conflicting evidence is excluded.
-- **An AI that must show its sources.** Every number in an answer has to trace to a tool result, or the answer falls back to a labelled rules-based mode.
-- **Writes that expect to be wrong.** Preview from the platform, hash-bound confirmation, stale detection, one write, read-back, audit, new objects paused.
-- **An audit that can say PARTIAL.** A read-only accuracy audit reports PASS, PARTIAL, FAIL or UNKNOWN, with categorised reasons.
+## Interactive demo
 
-## Features
+A static single-page app with **no backend and no network calls** (`connect-src 'none'` in the Content Security Policy). Everything runs in your browser on a synthetic dataset; campaign changes live in local state and can be reset.
 
-### AI Assistant
+| Area | Pages |
+|---|---|
+| Analytics | Overview (Combined, Meta, Google) · Sales · Leads · Attribution · Ad Comparison |
+| Campaigns | Campaigns & Ads · Create Ad / Campaign · Drafts |
+| AI | AI Assistant · AI Recommendations |
+| System | Data Sources · Activity Log |
 
-The hero feature. Ask in plain language; the assistant calls **17 read-only server-side tools** (performance, comparisons, sales by source, attribution, data freshness, budget scenarios), stores every tool result as a numbered fact, and must cite those facts. A grounding check then compares every number in the answer with the facts; an untraceable figure triggers one repair round, and if that fails the answer falls back to a clearly labelled rules-based mode. Identifiers the model invents do not resolve and are dropped.
+A platform selector (Combined, Meta Ads, Google Ads), date presets (7, 14, 30, 90 days, this month, previous month, year to date, custom range) and a Daily/Monthly toggle apply across pages. Pages that cover both platforms carry a **Meta + Google** marker. Run it locally:
 
+```bash
+npm ci
+npm run dev:demo      # http://localhost:5173
 ```
-question → model → read-only tool calls → numbered facts (F1, F2, …)
-         → draft answer → grounding check ─ ok ──→ answer with cited facts
-                                         └ fail → repair round → labelled fallback
-``` Details: [docs/ai-assistant-architecture.md](docs/ai-assistant-architecture.md).
 
-Example questions of the kinds its tools can answer (verified against the private tool list):
+## AI Assistant
 
-- "How did spend and cost per lead change over the last 30 days compared with the previous 30?"
-- "Which ads have the worst cost per result this month, and how confident is that?"
-- "What share of confirmed paid orders last month came from each order source?"
-- "Compare Meta and Google spend and results. What can I not add together?"
-- "Is the data fresh, and which days are missing?"
-- "What would moving this budget up by 20 % do to daily spend?" (returned as a labelled scenario)
+![AI Assistant answering which campaign had the best cost per lead last month, with summary, key numbers, evidence, recommendations, limits and a grounding badge](assets/screenshots/assistant.png)
 
-It also refuses by design: it cannot pause an ad, cannot say which ad caused a sale without a verifiable link, and does not report profit.
+The demo assistant is labelled **"Demo AI Assistant — simulated, data-grounded analysis"**. It does not run a language model and it was not trained or fine-tuned on anything. It shows the *orchestration pattern* the production assistant uses: understand the question, call read-only analytics tools, record every result as a fact, write the answer only from those facts, and check that every number in the answer traces back to one.
 
-### Cross-platform analytics, confirmed sales and attribution
+```mermaid
+flowchart LR
+  Q["Question"] --> R["Intent router<br/>22 topics + unsupported"]
+  R --> P["Period and platform<br/>from question or page filters"]
+  P --> T["Read-only analytics tools<br/>entityPerformance, salesOverview, …"]
+  T --> F["Fact book<br/>every number recorded"]
+  F --> A["Answer in five sections<br/>Summary · Key numbers · Evidence<br/>Recommendations · Limits"]
+  A --> G{"Grounding check<br/>every number in a fact?"}
+  G -- "yes" --> OK["Answer + badge<br/>'Grounded: n/n numbers verified'"]
+  G -- "no" --> X["Number flagged,<br/>never shown as verified"]
+  R -- "not supported" --> U["Honest limitation<br/>+ suggested alternatives"]
 
-Meta and Google side by side, with results kept by type (forms, visits, clicks, purchases) and never summed. Confirmed sales come from the Crossty sales backend (read-only, GET-only allow-list); each paid order is classified into exactly one source class (Meta, Google, Chatbot/AI, Partner portal, Other verified, Unknown, Conflicting) with evidence levels, and ROAS uses only verifiable evidence. The funnel is kept as separate stages, never merged into one "result":
+  classDef io fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b
+  classDef tool fill:#f3f4f6,stroke:#6b7280,color:#111827
+  classDef ok fill:#ecfdf5,stroke:#059669,color:#064e3b
+  classDef warn fill:#fef3c7,stroke:#b45309,color:#451a03
+  class Q,A io
+  class R,P,T,F tool
+  class OK ok
+  class G,X,U warn
+```
+
+- **Answers are evidence-first.** Each answer lists the period, platform, tool calls and entity IDs it used; "Show tool calls" opens the trace.
+- **22 supported topics**, including spend and leads, Meta vs Google, best and weakest campaign, why CPL changed, creative fatigue, top ads by CTR, budget reallocation (capped at 30 % per change), sales by source, attributable ROAS, advertising surplus, refunds, unknown-source orders, Google-labelled orders without evidence, data quality and month over month.
+- **It says what it cannot do.** Forecasts, competitor data, personal customer details and anything outside the dataset get a clear limitation plus questions it *can* answer.
+- **No write path.** The assistant can link to a campaign or open the confirmation workflow; it never changes anything itself.
+
+**AI Recommendations** turn the same rules into cards. Each card shows the entity, an evidence table (current vs previous period), the comparison period, an explanation, a concrete next step, a priority, and links to the campaign, the ad comparison and the assistant.
+
+![AI Recommendations: prioritised cards with evidence tables, comparison period, explanation and next step](assets/screenshots/recommendations.png)
+
+How the production assistant works (tools, fact ledger, repair round, fallback): [docs/ai-assistant-architecture.md](docs/ai-assistant-architecture.md).
+
+## Ad Comparison
+
+![Ad Comparison: three ads from Meta and Google side by side with previews, metrics and volume-guarded best markers](assets/screenshots/comparison.png)
+
+Pick two to four ads across Meta and Google and compare them over **the same period**: ad previews, spend, impressions, clicks, leads, CTR, CPC, CPM, CPL and lead rate, plus a trend chart per metric with Daily/Monthly views. Ratios are computed from sums, never averaged. A **Best** marker appears only with enough volume (1,000 impressions for CTR and CPM, 30 clicks for CPC, 5 leads for CPL), because small numbers are noisy. Selections live in the URL, so a comparison can be linked. Details: [docs/ad-comparison.md](docs/ad-comparison.md).
+
+## Simulated campaign management
+
+> **Demo simulation — no real advertising account is affected.**
+
+| Action | Meta (demo) | Google (demo) |
+|---|---|---|
+| Pause / resume, budget, edit | Preview → validate → confirm → execute (simulated) → read back → audit log | Validate-only: checked, never applied |
+| Create campaign / ad | Created **PAUSED**; activation is a separate confirmation | Validate-only |
+| Drafts | Save, edit, validate | Save, edit, validate |
+| Roles | Viewer is read-only; Ad editor and Admin can act | Same |
+
+Budgets above the per-change cap are rejected, URLs must stay on the advertiser's domain, and every step is recorded in the Activity Log. **Reset demo** restores the original state.
+
+<p>
+  <img src="assets/screenshots/campaigns.png" alt="Campaigns and Ads table with status, budget and actions" width="49%">
+  <img src="assets/screenshots/create.png" alt="Create Ad or Campaign form with a live ad preview" width="49%">
+</p>
+
+## Analytics and BI
+
+- **Spend, leads, paid orders and revenue** with change vs the previous equal-length period.
+- **Sales by source** with a distinct colour per source and a **Meta + Google + Chatbot/AI** subtotal; Partner portal, Other verified, Unknown and Conflicting are shown separately and still reconcile to the total.
+- **Attribution kept separate from customer source.** A customer labelled "Google" is not proof of a Google paid-ad sale; only verifiable evidence enters **attributable ROAS**, per platform and combined.
+- **Advertising surplus** (selected-source revenue − Meta and Google spend), clearly marked *not profit*.
+- **Incomplete periods** are flagged: a missing day is "no data", never zero, and chart lines show gaps instead of dropping to zero.
+- **Charts** have legends, tooltips, an expanded view and print/PDF export with solid, greyscale-distinguishable lines.
+
+<p>
+  <img src="assets/screenshots/sales.png" alt="Sales page with order status cards and sales by source chart" width="49%">
+  <img src="assets/screenshots/attribution.png" alt="Attribution page separating evidence levels from customer source" width="49%">
+</p>
+
+The funnel stays as separate stages and is never merged into one "result":
 
 | Stage | Source | What it is not |
 |---|---|---|
 | Click | Meta / Google | Not a lead |
-| Lead | Meta lead forms, Excel | Not a sale |
+| Lead | Platform lead forms | Not a sale |
 | Platform conversion | Meta / Google attribution | Not a confirmed order; platform-modelled |
-| Order | Crossty | Not necessarily paid |
-| Paid order | Crossty payment status | Not yet linked to an ad |
+| Order | Sales backend | Not necessarily paid |
+| Paid order | Payment status | Not yet linked to an ad |
 | Verified attributable revenue | Internal link on verifiable IDs | Only this enters attributable ROAS |
 
-A customer whose source is labelled "Google" is **not** proof of a Google paid-ad sale (it can be organic search, maps or brand search): such orders appear in the Google source class as the weakest evidence level, are never distributed to individual Google campaigns, and Google ROAS is flagged accordingly. The headline subtotal is **Meta + Google + Chatbot/AI**; Partner portal, Other verified, Unknown and Conflicting are shown separately and still reconcile to the total. Details: [docs/attribution-and-sales.md](docs/attribution-and-sales.md).
+Details: [docs/attribution-and-sales.md](docs/attribution-and-sales.md), [docs/data-accuracy.md](docs/data-accuracy.md).
 
-### Campaign management and ad comparison
+## Engineering
 
-| Capability | Status |
-|---|---|
-| Meta pause, budgets, rename, targeting, creative, create from draft | Live under scoped rules |
-| Meta new objects | Created paused; activation is a separate confirmation |
-| Google changes | Validate-only |
-| AI | Local drafts and proposals only |
-| Demo simulation | Planned (Phase 2) |
+- **One canonical number per metric.** Card, chart, monthly view and PDF read the same path; integrity tests check that daily sums equal monthly totals, Combined = Meta + Google, and source partitions reconcile.
+- **Missing is not zero.** Coverage comes from successful syncs; an API error is never zero spend.
+- **Deterministic synthetic data** with seasonality, a planted missing day, refunds, cancellations, unknown and conflicting sources, and no duplicate orders, all asserted by tests.
+- **Grounded answers.** A fact book records every tool result; a checker rejects any number it cannot trace.
+- **Writes that expect to be wrong** (production): preview read from the platform, hash-bound confirmation, stale detection, one write, read-back, audit, new objects paused.
+- **Locked-down static demo.** Strict CSP with no outbound connections, no secrets, browser tests that fail on any external request, console error, CSP violation or horizontal overflow on desktop and phone.
+- **Privacy scanning** of the tree and the full git history, plus gitleaks, in CI.
 
-Legend: *Live under scoped rules* = used in production; *Validate-only* = requests are validated by the platform, nothing is changed; *Simulated* = only in `analytics-core` (`SimulatedWriteAdapter`); *Planned* = roadmap.
+Twelve production problems with decision, implementation, verified result and trade-off: [docs/engineering-challenges.md](docs/engineering-challenges.md).
 
-**Ad comparison** puts up to four ads, ad sets or campaigns side by side on the same period, with metric direction (lower cost is better, higher rate is better) and ratios computed from sums. It names a winner only when result type, objective, attribution and sample size allow it. Details: [docs/campaign-management.md](docs/campaign-management.md), [docs/ad-comparison.md](docs/ad-comparison.md).
-
-### Financial analytics
-
-Revenue, spend and an "advertising surplus" from selected sources (Meta, Google, Chatbot/AI). **Surplus is not profit**: revenue includes VAT while spend is ex-VAT, and production cost is ignored. The MER ratio was removed in V4.6 because it mixed bases. Attributable ROAS is shown per platform and combined, only when inputs are complete.
-
-### Reporting
-
-Presets for 7, 14, 30 and 90 days, this month, previous month, year to date and a custom range. Daily and Monthly aggregation where it makes sense, expanded chart views, explanatory tooltips, and PDF/print output with solid, greyscale-distinguishable lines.
-
-### Operations and data integrity
-
-Scheduled, locked, idempotent syncs; API plus historical CSV ingestion that fills only gap days and verifies the rest; coverage-based missing-vs-zero; decimal money; time zones handled explicitly; a read-only accuracy audit with categorised PARTIAL results. Details: [docs/data-accuracy.md](docs/data-accuracy.md).
+<p>
+  <img src="assets/screenshots/mobile-overview.png" alt="Overview on a phone: two-column KPI grid" width="24%">
+  <img src="assets/screenshots/mobile-nav.png" alt="Navigation drawer on a phone" width="24%">
+</p>
 
 ## Architecture
 
@@ -170,50 +212,34 @@ flowchart LR
   class MW,GW warn
 ```
 
-More: [docs/architecture.md](docs/architecture.md), [full system diagram](diagrams/system-architecture.md), [data flow](diagrams/data-flow-reconciliation.md), [assistant flow](diagrams/ai-assistant-flow.md), [action controls](diagrams/campaign-action-controls.md). Static SVG exports are in `assets/diagrams/`.
+This is the production architecture. The public demo replaces sources, storage and writes with a synthetic dataset and simulated state, and reuses `analytics-core` for the domain logic. More: [docs/architecture.md](docs/architecture.md), [full system diagram](diagrams/system-architecture.md), [data flow](diagrams/data-flow-reconciliation.md), [assistant flow](diagrams/ai-assistant-flow.md), [action controls](diagrams/campaign-action-controls.md). Static SVG exports are in `assets/diagrams/`.
 
-## Engineering highlights
+## Run and verify
 
-Twelve problems, each with decision, implementation, verified result and trade-off, in [docs/engineering-challenges.md](docs/engineering-challenges.md). A selection:
-
-- One canonical spend path, so card, chart, monthly view and PDF match.
-- CSV history that fills gaps and is verified against the API to the cent where both exist.
-- Source classes that reconcile to the total, with an explicit Conflicting class.
-- A grounding checker that rejects any number it cannot trace.
-- A static test that keeps AI code from importing write modules.
-
-## Public code
-
-`packages/analytics-core` is an **independent reference implementation** written for this showcase, TypeScript with zero runtime dependencies, tested with synthetic data. It is not extracted from the production code.
-
-| Module | Purpose |
-|---|---|
-| `money.ts` | Exact decimal and minor-unit money |
-| `metrics.ts` | Ratios from sums, safe division |
-| `dates.ts` | Account time zone days, periods |
-| `aggregate.ts` | Daily to monthly aggregation |
-| `spend.ts` | Canonical spend, missing vs zero |
-| `sources.ts` | Order source classification |
-| `attribution.ts` | Evidence levels and ROAS rules |
-| `comparison.ts` | Metric direction and comparisons |
-| `audit.ts` | PASS, PARTIAL, FAIL, UNKNOWN |
-| `write-safety.ts` | Preview, hash, stale and cap checks |
-| `assistant/tools.ts`, `assistant/answer.ts` | Tool results as facts and number grounding |
-| `synthetic/generate.ts` | Obviously synthetic data |
-| `index.ts` | Public exports |
-
-Quick start (Node 22+, no network access or credentials needed after install):
+Node 22+. No credentials or network access are needed after install.
 
 ```bash
 git clone https://github.com/gabercmatej/Meta-Google-ads-sales-analytics-platform.git
 cd Meta-Google-ads-sales-analytics-platform
 npm ci
-npm test          # reference library tests
-npm run example   # builds the library and runs examples/quickstart.mjs on synthetic data
-npm run verify    # typecheck, tests, build, example, privacy scan, scanner tests
+npm run dev:demo      # interactive demo
+npm test              # reference library tests
+npm run example       # library quick start on synthetic data
+npm run verify        # typecheck, tests, builds, bundle budget, browser tests, privacy scan
 ```
 
-Every example prints `DEMO DATA — NOT REAL BUSINESS RESULTS`. See [examples/README.md](examples/README.md).
+`npm run test:browser` needs a local Chrome or Chromium. Every example and every demo page shows `DEMO DATA — NOT REAL BUSINESS RESULTS`. See [examples/README.md](examples/README.md).
+
+### Public code
+
+| Path | Purpose |
+|---|---|
+| `apps/demo` | Interactive demo: Vite, React 19, React Router, Recharts; assistant engine in `src/ai`, simulation in `src/sim` |
+| `packages/analytics-core` | Independent reference library, zero runtime dependencies: money, metrics, dates, aggregation, canonical spend, sources, attribution, comparison, audit, write safety, assistant facts and grounding, synthetic showcase dataset and queries |
+| `examples/` | Runnable synthetic examples |
+| `scripts/` | Privacy scanner, browser tests, bundle budget |
+
+`analytics-core` is written for this showcase and is not extracted from the production code.
 
 ## Documentation
 
@@ -227,34 +253,26 @@ Every example prints `DEMO DATA — NOT REAL BUSINESS RESULTS`. See [examples/RE
 | [campaign-management.md](docs/campaign-management.md) | Write flow, safety checks, Google validate-only |
 | [engineering-challenges.md](docs/engineering-challenges.md) | Twelve problems and decisions |
 | [adapting-to-another-business.md](docs/adapting-to-another-business.md) | What transfers and what does not |
-| [product-tour.md](docs/product-tour.md) | Screen-by-screen tour (text) |
+| [product-tour.md](docs/product-tour.md) | Screen-by-screen tour of the production app (text) |
 | [localization-glossary.md](docs/localization-glossary.md) | Slovenian UI terms in English |
-| [demo-plan.md](docs/demo-plan.md), [screenshot-plan.md](docs/screenshot-plan.md) | Phase 2 plans |
+| [demo-plan.md](docs/demo-plan.md), [screenshot-plan.md](docs/screenshot-plan.md) | How the demo and screenshots were planned and built |
 | [WHATS_PUBLIC.md](WHATS_PUBLIC.md), [SECURITY.md](SECURITY.md), [NOTICE.md](NOTICE.md) | Scope, reporting, terms |
-
-## Adapting to another business
-
-Parts are modular (rules, audit model, write-safety state machine, adapter boundary); others need real engineering (CRM adapter, status vocabulary, source taxonomy, localisation, finance model). No plug-and-play promise. See [docs/adapting-to-another-business.md](docs/adapting-to-another-business.md).
-
-## Roadmap
-
-Phase 2 is an interactive demo on synthetic data with simulated writes. No dates are promised.
 
 ## Repository map
 
-```
-README.md
-WHATS_PUBLIC.md, NOTICE.md
-SECURITY.md
-docs/            architecture, AI assistant, attribution, data accuracy, ad comparison, campaign
-                 management, engineering challenges, adapting, product tour, glossary, demo and
-                 screenshot plans
-diagrams/        Mermaid sources
-assets/diagrams/ exported diagram SVGs
-packages/        analytics-core reference library (src + tests)
-examples/        runnable synthetic examples and generated samples
-scripts/         dependency-free privacy scanner and its tests
-.github/         CI: privacy scan, gitleaks, typecheck, tests, build, sample drift check
+```text
+README.md, WHATS_PUBLIC.md, NOTICE.md, SECURITY.md
+apps/demo/          interactive demo (static SPA, synthetic data, simulated writes)
+packages/           analytics-core reference library (src + tests)
+docs/               architecture, AI assistant, attribution, data accuracy, comparison,
+                    campaign management, engineering, adapting, tour, glossary, plans
+diagrams/           Mermaid sources
+assets/diagrams/    exported diagram SVGs
+assets/screenshots/ screenshots captured from the running demo
+examples/           runnable synthetic examples and generated samples
+scripts/            privacy scanner, browser tests, bundle budget
+.github/            CI: privacy scan, gitleaks, typecheck, tests, builds, browser tests
+vercel.json         static hosting config with strict security headers
 ```
 
 ## Notice and licence
