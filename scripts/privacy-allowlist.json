@@ -27,7 +27,8 @@
     "w3.org",
     "developers.facebook.com",
     "developers.google.com",
-    "ads.google.com"
+    "ads.google.com",
+    "meta-google-ads-sales-analytics-pla-two.vercel.app"
   ],
   "ignoredPaths": [
     "node_modules",

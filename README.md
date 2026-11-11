@@ -6,6 +6,10 @@
 
 Every number traces to a source. Missing data is never zero. The AI can analyse and draft, never write.
 
+**[▶ Try the Interactive Demo](https://meta-google-ads-sales-analytics-pla-two.vercel.app)**
+
+<sub>Runs entirely in your browser on synthetic data. No sign-in, no tracking, no network calls.</sub>
+
 [Interactive demo](#interactive-demo) · [AI Assistant](#ai-assistant) · [Ad Comparison](#ad-comparison) · [Analytics and BI](#analytics-and-bi) · [Engineering](#engineering) · [Architecture](#architecture)
 
 </div>
