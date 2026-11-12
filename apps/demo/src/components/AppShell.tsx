@@ -1,6 +1,6 @@
 // Product shell: 252px sidebar with the PND logo and task-grouped menu, sticky demo banner + header with the
 // channel switcher, content column and a data-source footer. Mirrors the product layout in English.
-import { startTransition, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { startTransition, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { dataSourceStatus } from '@sedem-ads/analytics-core';
 import { COMBINED_PATH, NAV_GROUPS, ROUTES, routeFor, type NavIconName } from '../routes';
@@ -243,13 +243,56 @@ function ChannelSwitcher({ pathname }: { pathname: string }) {
   );
 }
 
+const DEMO_NOTE = 'Synthetic data. No real accounts, customers or campaigns. All actions are simulated in this browser.';
+
+/** One compact badge; the explanation opens on hover, focus or click. */
+function DemoBadge() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: Event) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  return (
+    <div ref={ref} className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button
+        type="button"
+        data-testid="demo-badge"
+        aria-expanded={open}
+        aria-describedby={open ? 'demo-badge-note' : undefined}
+        onClick={() => setOpen((o) => !o)}
+        onFocus={() => setOpen(true)}
+        className="rounded-full border border-slate-300 bg-slate-100 px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-slate-700 hover:bg-slate-200"
+      >
+        Demo
+      </button>
+      {open && (
+        <div id="demo-badge-note" role="tooltip" className="absolute right-0 top-full z-40 mt-1.5 w-64 rounded-lg border border-line bg-white p-3 text-xs leading-snug text-ink-2 shadow-pop">
+          {DEMO_NOTE}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SourceStrip({ search }: { search: string }) {
   const statuses = dataSourceStatus(getDataset());
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-ink-3" data-testid="source-strip">
       {statuses.map((s) => (
         <Link key={s.id} to={{ pathname: '/data-sources', search }} className="inline-flex items-center gap-1.5 hover:text-ink" title={`${s.name}: demo · refreshed ${dateTime(s.lastSyncAt)}`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
           <span className="font-medium text-ink-2">{s.name}</span>
           <span className="hidden sm:inline">demo</span>
           <span className="hidden text-slate-400 lg:inline">· {dateTime(s.lastSyncAt)}</span>
@@ -329,8 +372,10 @@ export function AppShell() {
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:shadow-pop">
         Skip to content
       </a>
-      <aside className="hidden h-screen w-[252px] shrink-0 flex-col border-r border-line bg-white md:sticky md:top-0 md:flex" aria-label="Main menu">
-        <SidebarBody role={role} pathname={loc.pathname} search={loc.search} />
+      <aside className="hidden w-[252px] shrink-0 border-r border-line bg-white md:block" aria-label="Main menu">
+        <div className="sticky top-0 flex h-screen flex-col">
+          <SidebarBody role={role} pathname={loc.pathname} search={loc.search} />
+        </div>
       </aside>
 
       <div className={`fixed inset-0 z-50 md:hidden ${open ? '' : 'pointer-events-none'}`}>
@@ -351,9 +396,6 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-30">
-          <div role="status" className="demo-stripes border-b border-amber-600 px-4 py-1 text-center text-xs font-bold leading-snug text-black">
-            DEMO — all data shown is synthetic. No connection to any real Meta, Google Ads, CRM or payment account.
-          </div>
           <header className="flex h-14 items-center gap-2 border-b border-line bg-white/95 px-3 backdrop-blur sm:gap-3 sm:px-6">
             <button
               type="button"
@@ -371,14 +413,14 @@ export function AppShell() {
               <ChannelSwitcher pathname={loc.pathname} />
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              <span className="hidden rounded-full border border-amber-600 bg-amber-300 px-2 py-0.5 text-2xs font-bold uppercase tracking-wide text-black sm:inline">Demo</span>
+              <DemoBadge />
               <UserMenu />
             </div>
           </header>
         </div>
         <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1360px] flex-1 px-4 py-6 outline-none sm:px-8 sm:py-8 min-[1700px]:max-w-[1760px]">
           {!range && (
-            <div role="status" className="mb-4 rounded-xl border border-amber-200/80 bg-warn-soft/70 px-3.5 py-3 text-sm text-amber-950">
+            <div role="status" className="mb-4 rounded-xl border border-line bg-slate-50 px-3.5 py-3 text-sm text-ink-2">
               The selected period has no completed days in the available history. Choose another period.
             </div>
           )}

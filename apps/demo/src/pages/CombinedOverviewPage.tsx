@@ -1,229 +1,320 @@
-import { useMemo } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { attributionOverview, performanceTotals, salesOverview } from '@sedem-ads/analytics-core';
-import { Badge, Card, EmptyState, KpiCard, Notice, PageTitle, Section, ShareBar, type GoodWhen } from '../components/ui';
+import { Badge, EmptyState, KpiCard, PageTitle, ShareBar, type GoodWhen } from '../components/ui';
 import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
-import { COLOR, sourceColor, sourceLabel } from '../components/charts/colors';
-import { MetricChart, RoasChart, SalesChart, SourcesChart, Spark, SurplusChart, SELECTED_LABEL, useSparks } from '../components/OverviewCharts';
+import { COLOR } from '../components/charts/colors';
+import { MetricChart, RoasChart, SourceLinesChart, Spark, SurplusChart, SurplusSummary, SELECTED_LABEL, metricOptions, useSparks } from '../components/OverviewCharts';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
 import { usablePreviousRange } from '../lib/useView';
-import { SELECTED_SOURCES, SURPLUS_NOTE } from '../lib/analytics';
-import { count, date, dateRange, money, multiple, pct, share } from '../lib/format';
+import { SURPLUS_NOTE } from '../lib/analytics';
+import { combinedFigures, GROUP_LABEL, relChange, type SourceGroup } from '../lib/combined';
+import { count, dateRange, money, multiple, share } from '../lib/format';
 
-function rel(cur: number | null | undefined, prev: number | null | undefined): number | null {
-  if (cur === null || cur === undefined || prev === null || prev === undefined || prev === 0) return null;
-  return ((cur - prev) / Math.abs(prev)) * 100;
+const GROUP_COLOR: Record<SourceGroup, string> = {
+  meta: COLOR.meta,
+  google: COLOR.google,
+  partner_portal: '#14b8a6',
+  chatbot_ai: COLOR.chatbot,
+  other_verified: '#64748b',
+  unattributed: '#94a3b8',
+};
+
+function Chip({ color, children }: { color: string; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-slate-50 px-2.5 py-1 text-xs text-ink-2">
+      <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: color }} />
+      {children}
+    </span>
+  );
 }
 
-function snapshot(range: { start: string; end: string }) {
-  const ds = getDataset();
-  const attr = attributionOverview(ds, { range });
-  const sales = salesOverview(ds, { range });
-  return {
-    meta: performanceTotals(ds, 'meta', range),
-    google: performanceTotals(ds, 'google', range),
-    total: performanceTotals(ds, 'combined', range),
-    attr,
-    sales,
-  };
+function SubHeading({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="mt-2">
+      <h2 className="text-lg font-semibold tracking-tight text-ink">{title}</h2>
+      {children && <p className="mt-0.5 max-w-4xl text-xs leading-relaxed text-ink-3">{children}</p>}
+    </div>
+  );
 }
 
 export default function CombinedOverviewPage() {
-  const { range } = useAppState();
+  const { range, period } = useAppState();
   const sparks = useSparks('combined');
   const sparksMeta = useSparks('meta');
   const sparksGoogle = useSparks('google');
+  const [notIncluded, setNotIncluded] = useState(false);
   const data = useMemo(() => {
     if (!range) return null;
+    const ds = getDataset();
     const prevRange = usablePreviousRange(range);
-    return { cur: snapshot(range), prev: prevRange ? snapshot(prevRange) : null, prevRange };
+    return { cur: combinedFigures(ds, range), prev: prevRange ? combinedFigures(ds, prevRange) : null, prevRange };
   }, [range]);
 
   if (!range || !data) {
     return (
       <div className="space-y-5">
-        <PageTitle title="Combined overview" />
+        <PageTitle title="Combined overview" badge={<Badge tone="combined">Meta + Google</Badge>} />
         <PeriodBar />
-        <EmptyState title="No completed days in this period">Pick another period. Today is a partial day and is excluded.</EmptyState>
+        <EmptyState title="No data in this period">Pick another period.</EmptyState>
       </div>
     );
   }
 
-  const { cur, prev, prevRange } = data;
-  const { attr, sales, total, meta, google } = cur;
+  const { cur: f, prev, prevRange } = data;
   const cmp = prevRange ? `vs ${dateRange(prevRange)}` : undefined;
-  const d = (a: number | null | undefined, b: number | null | undefined, goodWhen: GoodWhen = 'up') => ({ pct: rel(a, b), goodWhen });
-  const spendOf = (t: typeof meta) => t.spendMinor;
-  const spendSum = (spendOf(meta) ?? 0) + (spendOf(google) ?? 0);
-  const part = sales.partition;
-  const partOf = (s: string) => part.parts.find((x) => x.source === s);
-  const selectedOrders = part.selected.orders;
-  const verifiedRevenue = attr.verified.meta.revenueMinor + attr.verified.google.revenueMinor;
-  const prevAttr = prev?.attr;
-  const state = (v: number | null) => (v === null ? ({ state: 'no_data', reason: total.partial ? 'Some days have no data for both platforms' : 'No data for this period' } as const) : ({ state: 'ok' } as const));
+  const d = (a: number | null | undefined, b: number | null | undefined, goodWhen: GoodWhen = 'up') => ({ pct: relChange(a, b), goodWhen });
+  const g = (key: SourceGroup) => f.groups.find((x) => x.group === key)!;
+  const pg = (key: SourceGroup) => prev?.groups.find((x) => x.group === key);
+  const { metaMinor, googleMinor, totalMinor } = f.spend;
+  const spendOk = metaMinor !== null && googleMinor !== null && totalMinor !== null && totalMinor > 0;
+  const metaShare = spendOk ? share(metaMinor, totalMinor) : null;
+  const googleShare = spendOk ? share(googleMinor, totalMinor) : null;
+  const dayNote = (days: number) => (days >= f.spend.expectedDays ? `complete (${days} ${days === 1 ? 'day' : 'days'})` : `${days} of ${f.spend.expectedDays} days`);
+  const noRoas = (v: number | null) => (v === null ? ({ state: 'no_calc', reason: 'No spend or no verified sales' } as const) : ({} as const));
+  const spendState = (v: number | null) => (v === null ? ({ state: 'no_data', reason: 'No spend data for this period' } as const) : ({} as const));
+  const isToday = period.preset === 'today';
 
-  const ratioRows: { key: 'meta' | 'google'; name: string; spend: number | null; verified: { orders: number; revenueMinor: number }; sourceRev: number; sourceOrders: number; roas: number | null }[] = (['meta', 'google'] as const).map((k) => ({
-    key: k,
-    name: sourceLabel(k),
-    spend: k === 'meta' ? attr.spend.metaMinor : attr.spend.googleMinor,
-    verified: attr.verified[k],
-    sourceRev: partOf(k)?.revenueMinor ?? 0,
-    sourceOrders: partOf(k)?.orders ?? 0,
-    roas: attr.roas[k],
-  }));
+  const tableRows: { key: SourceGroup; name: string; roas: number | null; costPerCustomer: number | null; roasNote?: string }[] = [
+    { key: 'meta', name: 'Meta', roas: f.roas.meta, costPerCustomer: f.verified.meta.orders > 0 && metaMinor !== null ? Math.round(metaMinor / f.verified.meta.orders) : null },
+    { key: 'google', name: 'Google', roas: f.roas.google, costPerCustomer: f.verified.google.orders > 0 && googleMinor !== null ? Math.round(googleMinor / f.verified.google.orders) : null },
+    { key: 'partner_portal', name: 'Partner portal', roas: null, costPerCustomer: null, roasNote: 'no ROAS (source without ad spend)' },
+    { key: 'chatbot_ai', name: 'Chatbot/AI', roas: null, costPerCustomer: null, roasNote: 'no ROAS (source without ad spend)' },
+    { key: 'other_verified', name: 'Other verified sources', roas: null, costPerCustomer: null, roasNote: 'no ROAS (source without ad spend)' },
+    { key: 'unattributed', name: 'Unknown/unattributed', roas: null, costPerCustomer: null, roasNote: 'no ROAS (source is not an ad platform)' },
+  ];
 
   return (
     <div className="space-y-6">
       <PageTitle
         title="Combined overview"
-        sub="How much are we investing in advertising, how many sales can we link to it, and which platform earns more per euro spent?"
+        sub="How much do we invest in advertising, how many sales do we create, and which platform gives us better results?"
         badge={<Badge tone="combined">Meta + Google</Badge>}
       />
       <PeriodBar />
 
-      <Notice tone="warn" title="Demo mode">
-        Every figure here is synthetic. No real Meta, Google, CRM or payment data is connected, and nothing can be written to any advertising account.
-      </Notice>
-      {total.partial && (
-        <Notice tone="warn" title="Partial data">
-          Combined spend counts only days where both platforms have data: {total.completeDays} of {total.expectedDays} days in {dateRange(range)}
-          {total.missingDates.length > 0 && <> (missing: {total.missingDates.slice(0, 5).map((x) => date(x)).join(', ')}{total.missingDates.length > 5 ? ` and ${total.missingDates.length - 5} more` : ''})</>}. A missing day is “no data”, never zero.
-        </Notice>
-      )}
+      <section className="card px-4 py-4 sm:px-5" data-testid="spend-summary">
+        <p className="text-sm font-semibold leading-snug text-ink">
+          {spendOk ? (
+            <>
+              Total spend is {money(totalMinor)}: {metaShare} on Meta Ads and {googleShare} on Google Ads, over {f.spend.completeDays} complete {f.spend.completeDays === 1 ? 'day' : 'days'}
+              {isToday ? ' so far' : ''}.
+            </>
+          ) : (
+            <>Total spend is not available for this period because one platform has no spend data.</>
+          )}
+        </p>
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          <Chip color={COLOR.meta}>
+            Meta <span className="text-ink-3">{dayNote(f.spend.metaDays)}</span>
+          </Chip>
+          <Chip color={COLOR.google}>
+            Google <span className="text-ink-3">{dayNote(f.spend.googleDays)}</span>
+          </Chip>
+        </div>
+      </section>
 
-      <Section title="Advertising investment" description={`${dateRange(range)}${prevRange ? ` · compared with ${dateRange(prevRange)}` : ' · no previous period inside the available history'}`}>
+      <section className="min-w-0">
+        <h2 className="mb-3.5 text-lg font-semibold tracking-tight text-ink">Advertising investment</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard series="spend" label="Total spend" value={money(total.spendMinor)} {...state(total.spendMinor)} delta={d(total.spendMinor, prev?.total.spendMinor, 'neutral')} comparison={cmp} sub={total.partial ? 'Only days with both platforms' : 'Meta + Google'} sparkline={<Spark values={sparks.spend ?? []} label="Total spend trend" />} />
-          <KpiCard label="Meta spend" value={money(meta.spendMinor)} {...state(meta.spendMinor)} delta={d(meta.spendMinor, prev?.meta.spendMinor, 'neutral')} comparison={cmp} sub={meta.partial ? `${meta.completeDays} of ${meta.expectedDays} days` : 'Complete'} sparkline={<Spark values={sparksMeta.spend ?? []} color={COLOR.meta} label="Meta spend trend" />} />
-          <KpiCard label="Google spend" value={money(google.spendMinor)} {...state(google.spendMinor)} delta={d(google.spendMinor, prev?.google.spendMinor, 'neutral')} comparison={cmp} sub={google.partial ? `${google.completeDays} of ${google.expectedDays} days` : 'Complete'} sparkline={<Spark values={sparksGoogle.spend ?? []} color={COLOR.google} label="Google spend trend" />} />
-          <div className="card px-4 py-4 sm:px-5" data-testid="platform-share">
+          <KpiCard series="spend" label="Total spend" value={money(totalMinor)} {...spendState(totalMinor)} delta={d(totalMinor, prev?.spend.totalMinor, 'neutral')} comparison={cmp} sparkline={<Spark values={sparks.spend ?? []} label="Total spend trend" />} />
+          <KpiCard label="Meta spend" value={money(metaMinor)} {...spendState(metaMinor)} delta={d(metaMinor, prev?.spend.metaMinor, 'neutral')} comparison={cmp} sparkline={<Spark values={sparksMeta.spend ?? []} color={COLOR.meta} label="Meta spend trend" />} />
+          <KpiCard label="Google spend" value={money(googleMinor)} {...spendState(googleMinor)} delta={d(googleMinor, prev?.spend.googleMinor, 'neutral')} comparison={cmp} sparkline={<Spark values={sparksGoogle.spend ?? []} color={COLOR.google} label="Google spend trend" />} />
+          <div className="card px-4 py-3.5" data-testid="platform-share">
             <div className="text-xs font-medium text-ink-3">Platform share of spend</div>
-            {meta.spendMinor !== null && google.spendMinor !== null && spendSum > 0 ? (
+            {spendOk ? (
               <>
-                <div className="kpi-value kpi-value-lg mt-2">{share(meta.spendMinor, spendSum)} <span className="text-sm font-medium text-ink-3">Meta</span></div>
+                <div className="kpi-value mt-2">
+                  {metaShare} <span className="text-sm font-medium text-ink-3">Meta</span>
+                </div>
                 <div className="mt-3">
-                  <ShareBar label="Spend share" parts={[{ label: 'Meta', value: meta.spendMinor, color: COLOR.meta }, { label: 'Google', value: google.spendMinor, color: COLOR.google }]} />
+                  <ShareBar label="Spend share" parts={[{ label: 'Meta', value: metaMinor, color: COLOR.meta }, { label: 'Google', value: googleMinor, color: COLOR.google }]} />
                 </div>
                 <div className="mt-2 flex justify-between text-xs text-ink-3">
-                  <span>Meta {money(meta.spendMinor)}</span>
-                  <span>Google {money(google.spendMinor)}</span>
+                  <span>Meta {metaShare}</span>
+                  <span>Google {googleShare}</span>
                 </div>
               </>
             ) : (
-              <p className="mt-2 text-xs text-slate-600">Not calculated: one platform has no spend data for this period.</p>
+              <p className="mt-2 text-xs text-slate-600">Not calculated: one platform has no spend data.</p>
             )}
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <ChartCard title="Daily spend by platform" total={money(total.spendMinor)} totalLabel="Combined" note={total.partial ? 'The combined line is empty on days where one platform has no data.' : undefined} render={(o) => <MetricChart metric="spend" view="combined" {...o} />} />
-          <ChartCard title="Leads by platform" subtitle="Platform lead forms" total={count(total.leads)} totalLabel="Combined" render={(o) => <MetricChart metric="leads" view="combined" {...o} />} />
-        </div>
-      </Section>
+      </section>
 
-      <Section title="Sales and revenue" description="Paid orders by the customer’s recorded source, by order date. Revenue includes 22% VAT. Unattributed revenue is never credited to a platform.">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard series="paid-sales" label="Paid orders (all sources)" value={count(part.eligibleOrders)} delta={d(part.eligibleOrders, prev?.sales.partition.eligibleOrders)} comparison={cmp} sparkline={<Spark values={sparks.orders ?? []} color={COLOR.combined} label="Paid orders trend" />} />
-          <KpiCard label="Revenue (all sources)" value={money(part.eligibleRevenueMinor)} delta={d(part.eligibleRevenueMinor, prev?.sales.partition.eligibleRevenueMinor)} comparison={cmp} sub="Incl. 22% VAT" sparkline={<Spark values={sparks.revenue ?? []} color={COLOR.combined} label="Revenue trend" />} />
-          <KpiCard label="Meta + Google + Chatbot/AI" value={money(attr.selectedSourceRevenueMinor)} delta={d(attr.selectedSourceRevenueMinor, prevAttr?.selectedSourceRevenueMinor)} comparison={cmp} sub={`${count(selectedOrders)} orders · subtotal of the selected sources`} />
-          <KpiCard label="Platform leads (Meta + Google)" value={count(total.leads)} {...state(total.leads)} delta={d(total.leads, prev?.total.leads)} comparison={cmp} sub="Lead forms, not sales" sparkline={<Spark values={sparks.leads ?? []} label="Leads trend" />} />
+      <ChartCard scope="Meta + Google" title="Daily spend by platform" total={money(totalMinor)} totalLabel="Total" note="Total is Meta plus Google on days where both platforms have data; a day without data is left empty, never drawn as zero." metrics={metricOptions('spend')} render={(o) => <MetricChart {...o} metric={o.metric ?? 'spend'} view="combined" />} />
+
+      <section className="min-w-0">
+        <div className="mb-3.5">
+          <h2 className="text-lg font-semibold tracking-tight text-ink">Sales and profitability</h2>
+          <p className="mt-0.5 max-w-4xl text-xs leading-relaxed text-ink-3">
+            Paid orders by the customer's recorded source, by order date, {dateRange(range)}. Revenue includes 22% VAT. Revenue with an unknown source is not credited to any platform; ROAS exists only for Meta and Google.
+          </p>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Attributable ROAS · Meta" value={multiple(attr.roas.meta)} {...(attr.roas.meta === null ? { state: 'no_calc' as const, reason: 'No spend or no verified attribution' } : {})} delta={d(attr.roas.meta, prevAttr?.roas.meta)} comparison={cmp} sub="Verified evidence only" note="Verified attributed revenue divided by Meta spend." />
-          <KpiCard label="Attributable ROAS · Google" value={multiple(attr.roas.google)} {...(attr.roas.google === null ? { state: 'no_calc' as const, reason: 'No spend or no verified attribution' } : {})} delta={d(attr.roas.google, prevAttr?.roas.google)} comparison={cmp} sub="Verified evidence only" note="Verified attributed revenue divided by Google spend." />
-          <KpiCard label="Attributable ROAS · Combined" value={multiple(attr.roas.combined)} {...(attr.roas.combined === null ? { state: 'no_calc' as const, reason: 'No spend or no verified attribution' } : {})} delta={d(attr.roas.combined, prevAttr?.roas.combined)} comparison={cmp} sub="Ratio of sums" note="Total verified revenue divided by total spend. Not an average of the two platform ratios." sparkline={<Spark values={sparks.roas ?? []} color={COLOR.good} label="Combined ROAS trend" />} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="sales-grid">
+          <KpiCard series="paid-sales" label="Eligible paid orders" value={count(f.paidOrders)} delta={d(f.paidOrders, prev?.paidOrders)} comparison={cmp} sub="Paid status in the CRM" />
+          <KpiCard label="Paid revenue" value={money(f.paidRevenueMinor)} delta={d(f.paidRevenueMinor, prev?.paidRevenueMinor)} comparison={cmp} sub="Incl. 22% VAT" />
+          <KpiCard series="meta-value" label="Verified sales attributed to Meta" value={`${count(f.verified.meta.orders)} · ${money(f.verified.meta.revenueMinor)}`} delta={d(f.verified.meta.revenueMinor, prev?.verified.meta.revenueMinor)} comparison={cmp} note="Orders with hard evidence of a Meta ad (lead match or click id)." />
+          <KpiCard label="Sales attributed to Google" value={`${count(f.verified.google.orders)} · ${money(f.verified.google.revenueMinor)}`} delta={d(f.verified.google.revenueMinor, prev?.verified.google.revenueMinor)} comparison={cmp} note="Orders with hard evidence of a Google ad (click id)." />
+          {(['partner_portal', 'chatbot_ai', 'other_verified', 'unattributed'] as const).map((k) => (
+            <KpiCard key={k} label={GROUP_LABEL[k]} value={`${count(g(k).orders)} · ${money(g(k).revenueMinor)}`} delta={d(g(k).revenueMinor, pg(k)?.revenueMinor)} comparison={cmp} />
+          ))}
+          <KpiCard label="Attributable ROAS (Meta + Google)" value={multiple(f.roas.combined)} {...noRoas(f.roas.combined)} delta={d(f.roas.combined, prev?.roas.combined)} comparison={cmp} note="Verified Meta and Google revenue divided by total spend. A ratio of sums." />
+          <KpiCard label="Meta ROAS" value={multiple(f.roas.meta)} {...noRoas(f.roas.meta)} delta={d(f.roas.meta, prev?.roas.meta)} comparison={cmp} note="Verified Meta revenue divided by Meta spend." />
+          <KpiCard label="Google ROAS" value={multiple(f.roas.google)} {...noRoas(f.roas.google)} delta={d(f.roas.google, prev?.roas.google)} comparison={cmp} note="Verified Google revenue divided by Google spend." />
           <KpiCard
-            label="Advertising surplus"
-            value={money(attr.surplusMinor)}
-            {...state(attr.surplusMinor)}
-            delta={d(attr.surplusMinor, prevAttr?.surplusMinor)}
+            label="Cost per paying customer"
+            value={money(f.costPerCustomerMinor)}
+            {...(f.costPerCustomerMinor === null ? ({ state: 'no_calc', reason: 'No verified paying customers' } as const) : {})}
+            delta={d(f.costPerCustomerMinor, prev?.costPerCustomerMinor, 'down')}
             comparison={cmp}
-            sub="Not profit"
-            note={`Selected-source revenue − total spend. ${SURPLUS_NOTE}`}
-            sparkline={<Spark values={sparks.surplus ?? []} color={attr.surplusMinor !== null && attr.surplusMinor < 0 ? COLOR.bad : COLOR.good} label="Surplus trend" />}
+            note="Total spend divided by verified paid orders from Meta and Google."
           />
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <ChartCard
-            title="Sales by source"
-            total={money(attr.selectedSourceRevenueMinor)}
-            totalLabel={SELECTED_LABEL}
-            note="Stacked parts are paid revenue by customer source. The line is a subtotal of Meta, Google and Chatbot/AI, not an extra part. Source classifies a sale; it does not prove which ad produced it."
-            render={(o) => <SourcesChart {...o} />}
-          />
-          <ChartCard title="Paid orders and revenue" total={`${count(part.eligibleOrders)} orders · ${money(part.eligibleRevenueMinor)}`} totalLabel="Period" render={(o) => <SalesChart view="combined" {...o} />} />
-        </div>
-      </Section>
+      </section>
 
-      <Section title="Surplus and ROAS" description="Revenue against spend, per platform and combined. Ratios are computed from sums.">
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <ChartCard title="Advertising surplus" total={money(attr.surplusMinor)} note={`Selected-source revenue − total spend. ${SURPLUS_NOTE}`} render={(o) => <SurplusChart view="combined" {...o} />} />
-          <ChartCard
-            title="Attributable ROAS: Meta, Google and combined"
-            total={`Meta ${multiple(attr.roas.meta)} · Google ${multiple(attr.roas.google)} · Combined ${multiple(attr.roas.combined)}`}
-            note="Only orders with verified evidence (lead match or click id) are attributed. Platform-reported conversions are not mixed in."
-            render={(o) => <RoasChart view="combined" {...o} />}
-          />
-        </div>
-      </Section>
+      <ChartCard scope="Meta + Google" title="Sales by source: orders" total={count(f.paidOrders)} totalLabel="Total paid" note="Paid orders per customer source. The purple subtotal is derived from Meta, Google and Chatbot/AI and is not an extra source." render={(o) => <SourceLinesChart {...o} measure="orders" />} />
+      <ChartCard scope="Meta + Google" title="Sales by source: revenue" total={money(f.paidRevenueMinor)} totalLabel="Total paid" note="Paid revenue per customer source, incl. VAT. A source classifies a sale; it does not prove which ad produced it." render={(o) => <SourceLinesChart {...o} measure="revenue" />} />
 
-      <Card title="Revenue and attribution by platform" subtitle="Customer-source revenue classifies sales. ROAS uses verified attribution only; the rest stays unattributed.">
+      <SubHeading title="Revenue and spend: surplus and ROAS">Selected sources ({SELECTED_LABEL}) against total Meta and Google spend. Ratios are computed from sums.</SubHeading>
+      <ChartCard
+        scope="Meta + Google"
+        title="Selected-source advertising surplus"
+        total={money(f.surplusMinor)}
+        totalLabel="Surplus"
+        note={`Surplus = revenue of the selected sources minus (Meta + Google spend). ${SURPLUS_NOTE}`}
+        render={(o) => (
+          <>
+            <SurplusSummary />
+            <SurplusChart view="combined" {...o} />
+          </>
+        )}
+      />
+      <ChartCard
+        scope="Meta + Google"
+        title="Attributable ROAS: Meta, Google and combined"
+        total={`Meta ${multiple(f.roas.meta)} · Google ${multiple(f.roas.google)}`}
+        totalLabel="Period"
+        note="Only orders with verified evidence (lead match or click id) are attributed. Platform-reported conversions are not mixed in."
+        render={(o) => <RoasChart view="combined" {...o} />}
+      />
+
+      <section className="card min-w-0" data-testid="return-table">
+        <div className="rounded-t-card border-b border-line px-4 py-3.5 sm:px-5">
+          <h2 className="text-[15px] font-semibold leading-5 tracking-tight text-ink">Revenue and advertising return</h2>
+          <p className="mt-0.5 text-xs leading-snug text-ink-3">
+            {dateRange(range)} · paid orders by customer source{prevRange ? `, previous period ${dateRange(prevRange)}` : ''}
+          </p>
+        </div>
         <div className="overflow-x-auto">
-          <table className="nav-table w-full text-sm" data-testid="platform-comparison">
+          <table className="nav-table w-full min-w-[760px] text-sm" data-testid="platform-comparison">
             <thead>
               <tr className="text-left text-2xs uppercase tracking-wide text-ink-3">
-                <th className="px-4 py-2 font-semibold">Source</th>
+                <th className="px-4 py-2 font-semibold sm:px-5">Source</th>
                 <th className="px-2 py-2 text-right font-semibold">Orders</th>
                 <th className="px-2 py-2 text-right font-semibold">Revenue</th>
                 <th className="px-2 py-2 text-right font-semibold">Share</th>
-                <th className="px-2 py-2 text-right font-semibold">Spend</th>
-                <th className="px-2 py-2 text-right font-semibold">Verified revenue</th>
-                <th className="px-4 py-2 text-right font-semibold">ROAS (verified)</th>
+                <th className="px-2 py-2 font-semibold">ROAS</th>
+                <th className="px-2 py-2 text-right font-semibold">Previous period</th>
+                <th className="px-4 py-2 text-right font-semibold sm:px-5">Cost per customer</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {ratioRows.map((r) => (
+              {tableRows.map((r) => (
                 <tr key={r.key}>
-                  <td className="px-4 py-2.5 font-medium text-ink"><span aria-hidden className="mr-2 inline-block h-2 w-2 rounded-[2px]" style={{ background: sourceColor(r.key) }} />{r.name}</td>
-                  <td className="tabular px-2 py-2.5 text-right">{count(r.sourceOrders)}</td>
-                  <td className="tabular px-2 py-2.5 text-right">{money(r.sourceRev)}</td>
-                  <td className="tabular px-2 py-2.5 text-right">{share(r.sourceRev, part.eligibleRevenueMinor)}</td>
-                  <td className="tabular px-2 py-2.5 text-right">{money(r.spend)}</td>
-                  <td className="tabular px-2 py-2.5 text-right">{money(r.verified.revenueMinor)}</td>
-                  <td className="tabular px-4 py-2.5 text-right font-semibold">{multiple(r.roas)}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink sm:px-5">
+                    <span aria-hidden className="mr-2 inline-block h-2 w-2 rounded-[2px]" style={{ background: GROUP_COLOR[r.key] }} />
+                    {r.name}
+                  </td>
+                  <td className="tabular px-2 py-2.5 text-right">{count(g(r.key).orders)}</td>
+                  <td className="tabular px-2 py-2.5 text-right">{money(g(r.key).revenueMinor)}</td>
+                  <td className="tabular px-2 py-2.5 text-right">{share(g(r.key).revenueMinor, f.paidRevenueMinor)}</td>
+                  <td className="tabular px-2 py-2.5 text-xs text-ink-3">{r.roasNote ? r.roasNote : <span className="text-sm font-semibold text-ink">{multiple(r.roas)}</span>}</td>
+                  <td className="tabular px-2 py-2.5 text-right text-ink-2">{prev ? `${count(pg(r.key)?.orders)} · ${money(pg(r.key)?.revenueMinor)}` : '–'}</td>
+                  <td className="tabular px-4 py-2.5 text-right sm:px-5">{r.costPerCustomer === null ? <span className="text-slate-300">—</span> : money(r.costPerCustomer)}</td>
                 </tr>
               ))}
-              {part.parts
-                .filter((x) => !['meta', 'google'].includes(x.source))
-                .map((x) => (
-                  <tr key={x.source}>
-                    <td className="px-4 py-2.5 text-ink-2"><span aria-hidden className="mr-2 inline-block h-2 w-2 rounded-[2px]" style={{ background: sourceColor(x.source) }} />{sourceLabel(x.source)}{(SELECTED_SOURCES as readonly string[]).includes(x.source) ? '' : ''}</td>
-                    <td className="tabular px-2 py-2.5 text-right">{count(x.orders)}</td>
-                    <td className="tabular px-2 py-2.5 text-right">{money(x.revenueMinor)}</td>
-                    <td className="tabular px-2 py-2.5 text-right">{share(x.revenueMinor, part.eligibleRevenueMinor)}</td>
-                    <td className="px-2 py-2.5 text-right text-slate-300">—</td>
-                    <td className="px-2 py-2.5 text-right text-slate-300">—</td>
-                    <td className="px-4 py-2.5 text-right text-ink-3" title="No advertising platform, so no ROAS">no ROAS</td>
-                  </tr>
-                ))}
               <tr className="bg-slate-50 font-semibold">
-                <td className="px-4 py-2.5 text-ink">All paid orders</td>
-                <td className="tabular px-2 py-2.5 text-right">{count(part.eligibleOrders)}</td>
-                <td className="tabular px-2 py-2.5 text-right">{money(part.eligibleRevenueMinor)}</td>
-                <td className="tabular px-2 py-2.5 text-right">{pct(part.eligibleRevenueMinor > 0 ? 1 : null, 0)}</td>
-                <td className="tabular px-2 py-2.5 text-right">{money(total.spendMinor)}</td>
-                <td className="tabular px-2 py-2.5 text-right">{money(verifiedRevenue)}</td>
-                <td className="tabular px-4 py-2.5 text-right">{multiple(attr.roas.combined)}</td>
+                <td className="px-4 py-2.5 text-ink sm:px-5">Total paid</td>
+                <td className="tabular px-2 py-2.5 text-right" data-testid="table-total-orders">{count(f.paidOrders)}</td>
+                <td className="tabular px-2 py-2.5 text-right" data-testid="table-total-revenue">{money(f.paidRevenueMinor)}</td>
+                <td className="tabular px-2 py-2.5 text-right">{f.paidRevenueMinor > 0 ? '100.0%' : '–'}</td>
+                <td className="tabular px-2 py-2.5 text-ink">{multiple(f.roas.combined)}</td>
+                <td className="tabular px-2 py-2.5 text-right text-ink-2">{prev ? `${count(prev.paidOrders)} · ${money(prev.paidRevenueMinor)}` : '–'}</td>
+                <td className="tabular px-4 py-2.5 text-right sm:px-5">{money(f.costPerCustomerMinor)}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p className="border-t border-line px-4 py-3 text-xs leading-relaxed text-ink-3 sm:px-5">
-          Parts reconcile to the total{part.reconciles ? '' : ' (check failed)'}. Revenue by source is the customer’s recorded source, a classification; it is not proof an ad produced the sale. See{' '}
-          <Link to="/attribution" className="font-semibold text-brand hover:underline">Attribution</Link> for the evidence behind each order.
+        <ul className="list-disc space-y-1 border-t border-line px-8 py-3 text-xs leading-relaxed text-ink-3 sm:px-9">
+          <li>The sources add up to the total paid orders and revenue{f.reconciles ? '' : ' (check failed)'}. Unknown and conflicting-evidence orders are shown together as Unknown/unattributed.</li>
+          <li>ROAS uses verified evidence only and exists only for Meta and Google. The combined ROAS divides their verified revenue by total spend.</li>
+          <li>Cost per customer is spend divided by verified paid orders; other sources have no advertising spend.</li>
+          <li>
+            Source is the customer's recorded source and classifies a sale; it is not proof that an ad produced it. See <Link to="/attribution" className="font-semibold text-brand hover:underline">Attribution</Link> for the evidence behind each order.
+          </li>
+        </ul>
+      </section>
+
+      <section className="card min-w-0" data-testid="crm-reconciliation">
+        <div className="rounded-t-card border-b border-line px-4 py-3.5 sm:px-5">
+          <h2 className="text-[15px] font-semibold leading-5 tracking-tight text-ink">CRM reconciliation</h2>
+          <p className="mt-0.5 text-xs leading-snug text-ink-3">{dateRange(range)} · read from the local demo dataset (Europe/Ljubljana)</p>
+        </div>
+        <p className="px-4 pt-3 text-xs leading-relaxed text-ink-2 sm:px-5">
+          <strong className="text-ink">Paid orders = orders with status paid in the CRM; unpaid orders are not sales.</strong> The CRM order list also contains unpaid and cancelled orders, so its length is normally larger than the paid count.
         </p>
-      </Card>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[480px] text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-left text-xs text-ink-3">
+                <th className="px-4 py-2 font-medium sm:px-5">Group</th>
+                <th className="px-2 py-2 text-right font-medium">Orders</th>
+                <th className="px-4 py-2 text-right font-medium sm:px-5">Value</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {[
+                { name: 'All CRM orders', note: 'all statuses, by order date', v: f.crm.all, strong: false, muted: false },
+                { name: 'Paid orders', note: 'status paid; these are the sales', v: f.crm.paid, strong: true, muted: false },
+                { name: 'Unpaid orders', note: 'not sales', v: f.crm.unpaid, strong: false, muted: false },
+                { name: 'Excluded', note: 'cancelled or refunded', v: f.crm.excluded, strong: false, muted: false },
+                { name: 'Paid by payment date', note: 'same paid orders, placed by payment date instead of order date', v: f.crm.paidByPayment, strong: false, muted: true },
+              ].map((r) => (
+                <tr key={r.name} className={r.strong ? 'bg-slate-50/70' : ''}>
+                  <td className={`px-4 py-2.5 sm:px-5 ${r.muted ? 'text-ink-3' : ''}`}>
+                    <div className={r.strong ? 'font-semibold text-ink' : r.muted ? '' : 'text-ink'}>{r.name}</div>
+                    <div className="text-xs text-ink-3">{r.note}</div>
+                  </td>
+                  <td className="tabular px-2 py-2.5 text-right">{count(r.v.orders)}</td>
+                  <td className="tabular px-4 py-2.5 text-right sm:px-5">{money(r.v.revenueMinor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-3 text-xs leading-relaxed text-ink-3 sm:px-5">
+          <p>Basis difference: orders placed in the period and paid outside it, or placed earlier and paid inside it, move between the two bases. Values are order values from the CRM, not bank receipts.</p>
+        </div>
+      </section>
+
+      <section className="card min-w-0">
+        <button type="button" className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-ink sm:px-5" aria-expanded={notIncluded} onClick={() => setNotIncluded((v) => !v)}>
+          <span aria-hidden className={`text-[10px] text-ink-3 transition-transform ${notIncluded ? 'rotate-90' : ''}`}>
+            ▶
+          </span>
+          What's not included
+        </button>
+        {notIncluded && (
+          <ul className="list-disc space-y-1 border-t border-line px-8 py-3 text-xs leading-relaxed text-ink-3 sm:px-9">
+            <li>Platform-reported conversions are not added to sales; they are shown separately on each platform's overview.</li>
+            <li>Orders without verified evidence stay unattributed; they are never assigned to a platform by date, amount or name.</li>
+            <li>Other costs (agency fees, software, staff) are not in the surplus, and revenue includes VAT. The surplus is not profit.</li>
+            <li>Platforms outside Meta and Google have no advertising spend here, so they have no ROAS.</li>
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

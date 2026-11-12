@@ -117,3 +117,13 @@ describe('assistant intents', () => {
     expect(help).toMatch(/do not run a language model|no language model/);
   });
 });
+
+describe('assistant determinism', () => {
+  it('returns an identical answer for the same question and context, for every catalogue example', () => {
+    for (const i of INTENT_EXAMPLES) {
+      const a = ask(i.example);
+      const b = ask(i.example);
+      expect(JSON.stringify(b)).toBe(JSON.stringify(a));
+    }
+  });
+});

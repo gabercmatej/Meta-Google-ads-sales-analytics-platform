@@ -28,6 +28,8 @@ export interface SimApi {
   dismiss: (key: string) => void;
   restore: (key: string) => void;
   restoreAll: () => void;
+  /** Append a plain entry to the browser-local change log (no entity is changed). */
+  logActivity: (a: Omit<ActivityEntry, 'seq' | 'at' | 'actor'>) => void;
 }
 
 const noop = () => {};
@@ -50,6 +52,7 @@ const defaultApi: SimApi = {
   dismiss: noop,
   restore: noop,
   restoreAll: noop,
+  logActivity: noop,
 };
 
 export const SimCtx = createContext<SimApi>(defaultApi);

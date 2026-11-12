@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { PageTitle, Button, Badge, Notice, Skeleton } from '../components/ui';
+import { PageTitle, Button, Badge, Notice, Skeleton, BoxTabs } from '../components/ui';
 import { answerQuestion, ASSISTANT_LABEL, INTENT_EXAMPLES, type AssistantAnswer } from '../ai/engine';
 import type { PlatformView } from '@sedem-ads/analytics-core';
 import { getDataset } from '../lib/data';
@@ -28,7 +28,7 @@ const GROUPS: readonly { title: string; ids: readonly string[] }[] = [
 const SCOPES: readonly { value: PlatformView; label: string }[] = [
   { value: 'meta', label: 'Meta Ads' },
   { value: 'google', label: 'Google Ads' },
-  { value: 'combined', label: 'All' },
+  { value: 'combined', label: 'All together' },
 ];
 
 const eyebrow = 'text-[11px] font-semibold uppercase tracking-wider text-ink-3';
@@ -117,7 +117,7 @@ function AnswerView({ answer, onAsk }: { answer: AssistantAnswer; onAsk: (q: str
       )}
 
       {s.limits.length > 0 && (
-        <div className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-amber-950">
+        <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-ink-2 ring-1 ring-inset ring-line">
           <p className="font-semibold">Limits</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             {s.limits.map((l, i) => (
@@ -212,7 +212,7 @@ function ContextPanel({ scope, periodLabel, range, last }: { scope: PlatformView
           ))}
           <div className="flex justify-between gap-3">
             <dt className="text-ink-3">Data</dt>
-            <dd className="font-semibold text-amber-700">Simulated (DEMO)</dd>
+            <dd className="font-semibold text-ink-2">Simulated (DEMO)</dd>
           </div>
         </dl>
       </section>
@@ -252,6 +252,8 @@ function ContextPanel({ scope, periodLabel, range, last }: { scope: PlatformView
     </aside>
   );
 }
+
+export const DETERMINISTIC_LABEL = 'Deterministic demo assistant — answers are computed from the synthetic dataset';
 
 export default function AssistantPage() {
   const app = useAppState();
@@ -313,77 +315,71 @@ export default function AssistantPage() {
 
   return (
     <div className="space-y-4">
-      <PageTitle
-        title="AI assistant"
-        badge={<Badge tone="warn">Simulated</Badge>}
-        sub="Answers from verified app data for the selected period and platform. AI cannot change ads; a person always confirms actions."
-        right={
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-slate-100 px-3 text-xs font-semibold text-ink-2 ring-1 ring-inset ring-line">
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Demo mode · no LLM
-            </span>
-            <label className="sr-only" htmlFor="assistant-period">
-              Period
-            </label>
-            <select
-              id="assistant-period"
-              className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-xs font-semibold text-ink-2"
-              value={app.period.preset}
-              onChange={(e) => app.setPeriod({ preset: e.target.value as typeof app.period.preset, custom: null })}
-            >
-              {PERIOD_BAR.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.label}
-                </option>
-              ))}
-              {app.period.preset === 'custom' && <option value="custom">Custom</option>}
-            </select>
-            <Button variant="secondary" size="sm" disabled={messages.length === 0} onClick={() => setMessages([])}>
-              Clear conversation
-            </Button>
-          </div>
-        }
-      />
+      <PageTitle title="AI assistant" badge={<Badge tone="neutral">Simulated</Badge>} sub="Answers from verified app data for the selected period and platform. AI cannot change ads; a person always confirms actions." />
 
       <div className="grid gap-2 lg:grid-cols-2">
         <Notice tone="info">
           <span data-testid="assistant-label" className="font-semibold">
             {ASSISTANT_LABEL}
           </span>
-          <span className="block text-xs">A deterministic intent router calls analytics tools over the synthetic dataset. No language model runs and no data leaves your browser.</span>
+          <span className="block text-xs" data-testid="assistant-deterministic">
+            {DETERMINISTIC_LABEL}. No language model runs and no data leaves your browser.
+          </span>
         </Notice>
         <Notice tone="gray">
           Read-only. The assistant can suggest changes and link to the relevant page; creating, pausing or budgeting is always a separate, human-confirmed step.
         </Notice>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 text-xs text-ink-3">
+        <span className="inline-flex items-center gap-1.5">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v5M12 16h.01" />
+          </svg>
+          Limited mode
+        </span>
+        <label className="inline-flex items-center gap-2" htmlFor="assistant-period">
+          Period:
+          <select
+            id="assistant-period"
+            className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-xs font-semibold text-ink-2"
+            value={app.period.preset}
+            onChange={(e) => app.setPeriod({ preset: e.target.value as typeof app.period.preset, custom: null })}
+          >
+            {PERIOD_BAR.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
+            {app.period.preset === 'custom' && <option value="custom">Custom</option>}
+          </select>
+        </label>
+        <span>Automatic: a period named in the question wins.</span>
+        <Button variant="secondary" size="sm" disabled={messages.length === 0} onClick={() => setMessages([])}>
+          Clear conversation
+        </Button>
+      </div>
+
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-w-0 space-y-4">
           <div className="space-y-4" role="log" aria-live="polite" aria-label="Conversation">
             {messages.length === 0 && (
-              <div className="card px-4 py-6 sm:px-6">
-                <div className="mx-auto mb-5 max-w-xl text-center">
-                  <div aria-hidden className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-soft text-brand">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4zM18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-lg font-semibold tracking-tight text-ink">What would you like to know about your advertising?</h2>
-                  <p className="mt-1 text-sm text-ink-3">
-                    {PLATFORM_LABELS[scope]} · {periodLabel} ({rangeText}). Pick a question or type your own.
-                  </p>
-                </div>
-                <div className="grid gap-4 md:grid-cols-3" aria-label="Suggested questions">
+              <div className="px-1 py-2">
+                <h2 className="text-lg font-semibold tracking-tight text-ink">What do you want to know about advertising?</h2>
+                <p className="mt-1 text-sm text-ink-3">
+                  Ask in plain words. Name the period in the question (&quot;this month&quot;, &quot;September&quot;, &quot;last 14 days&quot;); without one, the page period is used: {PLATFORM_LABELS[scope]} · {periodLabel} ({rangeText}).
+                </p>
+                <div className="mt-5 grid gap-5 md:grid-cols-3" aria-label="Suggested questions">
                   {GROUPS.map((grp) => (
                     <div key={grp.title}>
                       <h3 className={`${eyebrow} mb-2`}>{grp.title}</h3>
-                      <div className="space-y-1.5">
-                        {grp.ids.map((id) => {
+                      <div className="space-y-2">
+                        {grp.ids.slice(0, 4).map((id) => {
                           const info = byId.get(id);
                           if (!info) return null;
                           return (
-                            <button key={id} type="button" className="card card-hover w-full px-3 py-2.5 text-left text-sm text-ink-2" onClick={() => ask(info.example)}>
+                            <button key={id} type="button" className="w-full rounded-2xl border border-line-strong bg-surface px-3.5 py-2.5 text-left text-sm text-ink-2 shadow-sm transition-colors hover:border-brand hover:text-brand" onClick={() => ask(info.example)}>
                               {info.example}
                             </button>
                           );
@@ -414,20 +410,7 @@ export default function AssistantPage() {
           </div>
 
           <div className="space-y-2">
-            <div role="radiogroup" aria-label="Platform" className="inline-flex gap-0.5 rounded-lg border border-line bg-surface p-0.5 text-xs shadow-card">
-              {SCOPES.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={scope === o.value}
-                  className={`rounded-md px-2.5 py-1 font-semibold transition-colors ${scope === o.value ? 'bg-brand-soft text-brand' : 'text-ink-3 hover:text-ink'}`}
-                  onClick={() => setScope(o.value)}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
+            <BoxTabs label="Platform" value={scope} options={SCOPES} onChange={setScope} />
             <form
               className="flex items-end gap-2 rounded-card border border-line bg-surface p-2 shadow-card focus-within:border-brand"
               onSubmit={(e) => {
@@ -448,7 +431,7 @@ export default function AssistantPage() {
                 Ask
               </Button>
             </form>
-            <p className="px-1 text-[11px] text-ink-3">Enter sends, Shift+Enter adds a new line. Answers are simulated from synthetic demo data.</p>
+            <p className="px-1 text-[11px] text-ink-3">Enter sends, Shift+Enter adds a new line. Numbers come from the synthetic dataset; AI cannot change ads.</p>
           </div>
         </div>
 

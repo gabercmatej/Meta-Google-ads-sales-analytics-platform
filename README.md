@@ -10,11 +10,11 @@ Meta Ads and Google Ads performance, verified sales and leads, a grounded AI ass
 
 <sub>Runs entirely in your browser on synthetic data. No sign-in, no tracking, no network calls.</sub>
 
-[Demo](#interactive-demo) · [Combined overview](#combined-overview) · [Campaigns](#campaigns--ads) · [Create](#create-ad-or-campaign) · [AI assistant](#ai-assistant) · [Recommendations](#ai-recommendations) · [Comparison](#ad-comparison) · [Sales and attribution](#sales-leads-and-attribution) · [Data sources](#data-sources-and-change-log) · [Architecture](#architecture)
+[Architecture](#architecture) · [Overview](#combined-overview) · [AI](#ai-assistant) · [Advertising](#campaigns--ads) · [Results](#sales-leads-and-attribution) · [System](#data-sources-and-change-log) · [Demo](#interactive-demo)
 
 </div>
 
-![Combined overview: Meta + Google spend, sales by source, attributable ROAS and advertising surplus with Daily/Monthly charts](assets/screenshots/combined.png)
+![Combined overview: Meta + Google spend, sales by source, attributable ROAS and advertising surplus with Daily/Monthly charts](assets/screenshots/combined-hero.png)
 
 <sub>Screenshot of the interactive demo. **DEMO DATA — NOT REAL BUSINESS RESULTS.** Campaign names, creatives, numbers and IDs are synthetic.</sub>
 
@@ -30,41 +30,70 @@ Meta Ads and Google Ads performance, verified sales and leads, a grounded AI ass
 | **Meta writes** | Live, human-confirmed, scoped to allowed accounts | Simulated in browser state only |
 | **Google writes** | Validate-only | Validate-only (simulated) |
 | **Sync** | Daily cron + manual refresh | Schedule shown, refresh simulated |
-| **Tests** | 2,096 tests (private, not runnable here) | 217 library + 95 demo + 22 scanner tests, 200 browser checks |
+| **Tests** | 2,096 tests (private, not runnable here) | 221 library + 147 demo + 22 scanner tests, 336 browser checks |
 
-## Interactive demo
-
-A static single-page app with **no backend and no network calls** (`connect-src 'none'` in the Content Security Policy). Campaign changes live in local state; **Reset demo** on the Change log page restores the original data.
+## Architecture
 
 ```mermaid
 flowchart LR
-  subgraph SHELL["Shared shell"]
-    direction TB
-    SW["Platform switch<br/>Meta Ads · Google Ads · Combined"]
-    PER["Period presets<br/>Yesterday … This year · Custom"]
-    GR["Daily / Monthly"]
-    ROLE["Role<br/>Viewer · Ad editor · Administrator"]
+  subgraph S1["Sources"]
+    A1["Meta Ads API"]
+    A2["Google Ads API"]
+    A3["CRM"]
+    A4["Lead sheet"]
+    A5["Payments"]
   end
-  SHELL --> OV["Overview<br/>Combined · Meta · Google"]
-  SHELL --> ADV["Advertising<br/>Campaigns & ads · Create ad · Drafts"]
-  SHELL --> RES["Results<br/>Sales · Leads · Attribution · Ad comparison"]
-  SHELL --> AI["AI help<br/>AI assistant · Recommendations"]
-  SHELL --> SYS["System<br/>Data sources · Change log · Users"]
+  subgraph S2["Pipelines"]
+    B1["Scheduled sync"]
+    B2["CSV import"]
+    B3["Validation"]
+  end
+  subgraph S3["Data layer"]
+    C1[("PostgreSQL")]
+    C2["Money in minor units"]
+    C3["UTC events"]
+  end
+  subgraph S4["Analytics"]
+    D1["Canonical spend"]
+    D2["Attribution"]
+    D3["Reconciliation audit"]
+  end
+  subgraph S5["AI layer"]
+    E1["Deterministic tools"]
+    E2["Grounding check"]
+    E3["Recommendation rules"]
+  end
+  subgraph S6["UI"]
+    F1["Overview"]
+    F2["Campaigns"]
+    F3["Results"]
+    F4["AI"]
+    F5["System"]
+  end
+  subgraph S7["Controlled actions"]
+    G1["Preview"]
+    G2["Human confirm"]
+    G3["Single write"]
+    G4["Read-back"]
+    G5["Log"]
+  end
+  S1 --> S2 --> S3 --> S4
+  S4 --> S5
+  S4 --> S6
+  S5 --> S6
+  S6 --> S7
+  S5 -. "drafts only, never writes" .-> S7
+  G1 --> G2 --> G3 --> G4 --> G5
 
-  classDef shell fill:#eef4ff,stroke:#1f5fa8,color:#0b2545
-  classDef page fill:#ffffff,stroke:#94a3b8,color:#0f172a
-  classDef ai fill:#ecfdf5,stroke:#059669,color:#064e3b
-  class SW,PER,GR,ROLE shell
-  class OV,ADV,RES,SYS page
-  class AI ai
+  classDef box fill:#9bbbe0,stroke:#1f3a5f,color:#0a0a0a
+  class A1,A2,A3,A4,A5,B1,B2,B3,C1,C2,C3,D1,D2,D3,E1,E2,E3,F1,F2,F3,F4,F5,G1,G2,G3,G4,G5 box
 ```
 
-The platform switch decides which workspace you are in. Meta Ads and Google Ads are separate workspaces with their own campaigns, charts and recommendations, and **Combined** puts both side by side. Platform, period and Daily/Monthly live in the URL, so every view can be linked. Pages that cover both platforms (Attribution, AI, System) carry a **Meta + Google** marker.
+Sources are read-only. Every write to an ad platform follows preview, human confirmation, one write, read-back and a log entry. The AI layer can only read through its tools and prepare local drafts. New objects are created **PAUSED**, and activation is a separate confirmed action.
 
-```bash
-npm ci
-npm run dev:demo      # http://localhost:5173
-```
+**In this public demo** the sources, pipelines and database are replaced by an in-browser synthetic data generator, and the controlled actions are simulated in local browser state. The domain logic (`packages/analytics-core`) is the same kind of code the architecture describes.
+
+More: [docs/architecture.md](docs/architecture.md), [full system diagram](diagrams/system-architecture.md), [data flow](diagrams/data-flow-reconciliation.md), [assistant flow](diagrams/ai-assistant-flow.md), [action controls](diagrams/campaign-action-controls.md). Static SVG exports are in `assets/diagrams/`.
 
 ## Combined overview
 
@@ -76,45 +105,14 @@ The first screen answers three questions: how much are we investing in advertisi
 - **Attributable ROAS** is shown per platform and combined, from verified evidence only, computed from sums and never averaged.
 - **Every chart** has a period total, Daily/Monthly, an expanded view, and print/PDF export with solid lines that stay distinguishable in greyscale.
 
+![Combined overview, full page: Meta + Google spend, sales by source, attributable ROAS and advertising surplus](assets/screenshots/combined-full.png)
+
 <p>
-  <img src="assets/screenshots/overview.png" alt="Meta Ads overview: spend, platform leads, CPL, paid orders, revenue, attributable ROAS and advertising surplus with sparklines" width="49%">
-  <img src="assets/screenshots/overview-google.png" alt="Google Ads overview with the same layout for the Google workspace" width="49%">
+  <img src="assets/screenshots/meta-overview.png" alt="Meta Ads overview: spend, platform leads, CPL, paid orders, revenue, attributable ROAS and advertising surplus with sparklines" width="49%">
+  <img src="assets/screenshots/google-overview.png" alt="Google Ads overview with the same layout for the Google workspace" width="49%">
 </p>
 
 Each platform overview has the same advertising summary, linked-sales estimate, delivery block and trend charts. A partial period is flagged with the days that have data and the dates that are missing. Chart lines show a gap there instead of dropping to zero.
-
-## Campaigns & ads
-
-![Campaigns & ads: Meta campaigns with status, budget, spend share, leads, CPL change, CTR, CPC and Pause/Budget/Edit actions](assets/screenshots/campaigns.png)
-
-Campaigns, ad sets and ads sit in one table, with search and quick filters. Columns are grouped into delivery, spend and results, engagement, and actions, and CPL change against the previous period is shown inline. Each campaign opens a detail page with KPI cards, a trend chart you can switch between metrics, and its settings as read from the (simulated) account.
-
-<p>
-  <img src="assets/screenshots/campaign-detail.png" alt="Campaign detail: KPI cards with change vs previous period, trend chart and campaign settings" width="49%">
-  <img src="assets/screenshots/campaigns-google.png" alt="Google Ads campaigns: the same table for the Google workspace with validate-only actions" width="49%">
-</p>
-
-> **Demo simulation — no real advertising account is affected.**
-
-| Action | Meta (demo) | Google (demo) |
-|---|---|---|
-| Pause / resume, budget, edit | Preview → validate → confirm → execute (simulated) → read back → change log | Validate-only: checked, never applied |
-| Create campaign / ad | Created **PAUSED**; activation is a separate confirmation | Validate-only |
-| Drafts | Save, edit, validate | Save, edit, validate |
-| Roles | Viewer is read-only; Ad editor and Administrator can act | Same |
-
-Budgets above the per-change cap are rejected, and final URLs must stay on the advertiser's domain.
-
-## Create ad or campaign
-
-![Create campaign: guided Meta flow with a live ad preview](assets/screenshots/create.png)
-
-Each platform has a guided step-by-step flow with character counters, URL rules and a live preview that redraws as you type. Everything is created **PAUSED**. Drafts stay in the browser and can be validated later on the Drafts page. Administrators also see a Users and roles page.
-
-<p>
-  <img src="assets/screenshots/drafts.png" alt="Drafts page: saved local drafts with validation results" width="49%">
-  <img src="assets/screenshots/users.png" alt="Users and roles page visible to administrators" width="49%">
-</p>
 
 ## AI assistant
 
@@ -163,11 +161,15 @@ flowchart LR
 - **It says what it cannot do.** Forecasts, competitor data, personal customer details and anything outside the dataset get a stated limitation plus questions it *can* answer.
 - **No write path.** It can link to a campaign or open the confirmation workflow, but it never changes anything itself.
 
+![Assistant grounding flow: question, read-only tools over the dataset, fact ledger, number check, answer](assets/diagrams/ai-assistant-flow.svg)
+
 How the production assistant works (tools, fact ledger, repair round, fallback): [docs/ai-assistant-architecture.md](docs/ai-assistant-architecture.md).
 
 ## AI recommendations
 
 ![Recommendations: prioritised cards with evidence tables, comparison period, explanation and suggested next step](assets/screenshots/recommendations.png)
+
+![Recommendation detail: evidence table, explanation, charts, anomalies and budget scenario](assets/screenshots/recommendation-detail.png)
 
 Recommendations are rule-based cards that compare the selected period with the previous period of the same length. You can filter them by priority, type and platform. Each card shows:
 
@@ -179,18 +181,41 @@ Recommendations are rule-based cards that compare the selected period with the p
 
 **Prepare change** opens the same confirmation workflow as the Campaigns page. Nothing happens until a person confirms it.
 
-## Ad comparison
+## Campaigns & ads
 
-![Ad comparison: Meta ads side by side with previews, metrics and volume-guarded Best markers](assets/screenshots/comparison.png)
+![Campaigns & ads: Meta campaigns with status, budget, spend share, leads, CPL change, CTR, CPC and Pause/Budget/Edit actions](assets/screenshots/campaigns-meta.png)
 
-Pick two to four ads from the same platform and compare them over **the same period**:
+Campaigns, ad sets and ads sit in one table, with search and quick filters. Columns are grouped into delivery, spend and results, engagement, and actions, and CPL change against the previous period is shown inline. Each campaign opens a detail page with KPI cards, a trend chart you can switch between metrics, and its settings as read from the (simulated) account.
 
-- **Shown per ad:** ad previews, spend, impressions, clicks, leads, CTR, CPC, CPM, CPL and lead rate, plus a trend chart per metric.
-- **Ratios** are computed from sums.
-- **A Best marker** appears only with enough volume: 1,000 impressions for CTR and CPM, 30 clicks for CPC, 5 leads for CPL.
-- **Selections** live in the URL.
+<p>
+  <img src="assets/screenshots/campaign-drilldown.png" alt="Ad detail: KPI cards with change vs previous period, trend chart and the ad creative preview" width="49%">
+  <img src="assets/screenshots/campaigns-google.png" alt="Google Ads campaigns: the same table for the Google workspace with validate-only actions" width="49%">
+</p>
+<p>
+  <img src="assets/screenshots/campaigns-google-assetgroups.png" alt="Google Performance Max campaign opened to its asset groups" width="49%">
+</p>
 
-Details: [docs/ad-comparison.md](docs/ad-comparison.md).
+> **Demo simulation — no real advertising account is affected.**
+
+| Action | Meta (demo) | Google (demo) |
+|---|---|---|
+| Pause / resume, budget, edit | Preview → validate → confirm → execute (simulated) → read back → change log | Validate-only: checked, never applied |
+| Create campaign / ad | Created **PAUSED**; activation is a separate confirmation | Validate-only |
+| Drafts | Save, edit, validate | Save, edit, validate |
+| Roles | Viewer is read-only; Ad editor and Administrator can act | Same |
+
+Budgets above the per-change cap are rejected, and final URLs must stay on the advertiser's domain.
+
+## Create ad or campaign
+
+<p>
+  <img src="assets/screenshots/create-meta.png" alt="Create campaign: guided Meta flow with a live ad preview" width="49%">
+  <img src="assets/screenshots/create-google.png" alt="Create campaign: guided Google search flow with a live ad preview" width="49%">
+</p>
+
+Each platform has a guided step-by-step flow with character counters, URL rules and a live preview that redraws as you type. Everything is created **PAUSED**. Drafts stay in the browser and can be validated later on the Drafts page.
+
+![Drafts page: saved local drafts with validation results](assets/screenshots/drafts.png)
 
 ## Sales, leads and attribution
 
@@ -217,26 +242,33 @@ Details: [docs/ad-comparison.md](docs/ad-comparison.md).
 
 Details: [docs/attribution-and-sales.md](docs/attribution-and-sales.md), [docs/data-accuracy.md](docs/data-accuracy.md).
 
+## Ad comparison
+
+![Ad comparison: Meta ads side by side with previews, metrics and volume-guarded Best markers](assets/screenshots/compare.png)
+
+Pick two to four ads from the same platform and compare them over **the same period**:
+
+- **Shown per ad:** ad previews, spend, impressions, clicks, leads, CTR, CPC, CPM, CPL and lead rate, plus a trend chart per metric.
+- **Ratios** are computed from sums.
+- **A Best marker** appears only with enough volume: 1,000 impressions for CTR and CPM, 30 clicks for CPC, 5 leads for CPL.
+- **Selections** live in the URL.
+
+Details: [docs/ad-comparison.md](docs/ad-comparison.md).
+
 ## Data sources and change log
 
 <p>
-  <img src="assets/screenshots/data-sources.png" alt="Data sources: daily sync schedule, per-source last sync, gap days and manual refresh" width="49%">
-  <img src="assets/screenshots/activity.png" alt="Change log: every simulated change with who, what, before, after and result" width="49%">
+  <img src="assets/screenshots/data-sources.png" alt="Data sources: per-source last refresh, row counts and coverage" width="49%">
+  <img src="assets/screenshots/activity.png" alt="Change log: simulated changes with actor, action, before and after, and outcome" width="49%">
+</p>
+<p>
+  <img src="assets/screenshots/users.png" alt="Users and roles page, shown for the Administrator role" width="49%">
 </p>
 
 - **Daily sync:** a cron job (`0 6 * * *`, 06:00 Europe/Ljubljana) refreshes the data every day.
 - **Manual refresh:** each source can also be refreshed on demand. In the demo, refresh only updates a local timestamp.
 - **Per-source status:** each source shows its last sync and its **gap days** with the reason.
 - **Change log:** records every action, including rejected and validate-only ones.
-
-## On a phone
-
-<p>
-  <img src="assets/screenshots/mobile-overview.png" alt="Combined overview on a phone" width="24%">
-  <img src="assets/screenshots/mobile-nav.png" alt="Navigation drawer on a phone" width="24%">
-</p>
-
-On a phone the same shell collapses into a drawer and the cards stack. Browser tests fail on any horizontal page overflow at 390 px.
 
 ## Engineering
 
@@ -260,68 +292,39 @@ On a phone the same shell collapses into a drawer and the cards stack. Browser t
 
 Twelve production problems, each with the decision, implementation, verified result and trade-off: [docs/engineering-challenges.md](docs/engineering-challenges.md).
 
-## Architecture
+## Interactive demo
+
+A static single-page app with **no backend and no network calls** (`connect-src 'none'` in the Content Security Policy). Campaign changes live in local state; **Reset demo** on the Change log page restores the original data.
 
 ```mermaid
 flowchart LR
-  subgraph SRC["Sources (read-only)"]
-    META["Meta API"]
-    GADS["Google Ads API"]
-    SALES["Sales backend"]
-    XLS["Excel, CSV, Stripe"]
+  subgraph SHELL["Shared shell"]
+    direction TB
+    SW["Platform switch<br/>Meta Ads · Google Ads · Combined"]
+    PER["Period presets<br/>Yesterday … This year · Custom"]
+    GR["Daily / Monthly"]
+    ROLE["Role<br/>Viewer · Ad editor · Administrator"]
   end
-  subgraph ING["Ingestion"]
-    AD["Adapters"]
-    SYNC["Locked sync runner"]
-  end
-  subgraph STORE["Storage"]
-    DB[("PostgreSQL")]
-  end
-  subgraph CORE["Pure domain logic"]
-    SPEND["Canonical spend"]
-    ATTR["Attribution"]
-    AUD["Accuracy audit"]
-  end
-  subgraph APP["Application"]
-    UI["Dashboards, PDF"]
-    ASSIST["Grounded assistant"]
-    EDIT["Campaign editor"]
-  end
-  subgraph WRITE["Human-confirmed writes"]
-    MW["Meta: scoped live"]
-    GW["Google: validate-only"]
-  end
-  META --> AD
-  GADS --> AD
-  SALES --> AD
-  XLS --> AD
-  AD --> SYNC --> DB
-  DB --> SPEND
-  DB --> ATTR
-  DB --> AUD
-  SPEND --> UI
-  ATTR --> UI
-  AUD --> UI
-  SPEND --> ASSIST
-  ATTR --> ASSIST
-  ASSIST -. "local draft only" .-> EDIT
-  UI --> EDIT
-  EDIT --> MW
-  EDIT --> GW
+  SHELL --> OV["Overview<br/>Combined · Meta · Google"]
+  SHELL --> ADV["Advertising<br/>Campaigns & ads · Create ad · Drafts"]
+  SHELL --> RES["Results<br/>Sales · Leads · Attribution · Ad comparison"]
+  SHELL --> AI["AI help<br/>AI assistant · Recommendations"]
+  SHELL --> SYS["System<br/>Data sources · Change log · Users"]
 
-  classDef src fill:#e8f1fb,stroke:#1f5fa8,color:#0b2545
-  classDef proc fill:#f3f3f3,stroke:#555555,color:#111111
-  classDef store fill:#fff4d6,stroke:#9a6b00,color:#2b1d00
-  classDef app fill:#e6f6ea,stroke:#1e7a3c,color:#0a2d16
-  classDef warn fill:#fde8e8,stroke:#b3261e,color:#3b0b08
-  class META,GADS,SALES,XLS src
-  class AD,SYNC,SPEND,ATTR,AUD proc
-  class DB store
-  class UI,ASSIST,EDIT app
-  class MW,GW warn
+  classDef shell fill:#eef4ff,stroke:#1f5fa8,color:#0b2545
+  classDef page fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  classDef ai fill:#ecfdf5,stroke:#059669,color:#064e3b
+  class SW,PER,GR,ROLE shell
+  class OV,ADV,RES,SYS page
+  class AI ai
 ```
 
-This is the production architecture. The public demo replaces sources, storage and writes with a synthetic dataset and simulated state, and reuses `analytics-core` for the domain logic. More: [docs/architecture.md](docs/architecture.md), [full system diagram](diagrams/system-architecture.md), [data flow](diagrams/data-flow-reconciliation.md), [assistant flow](diagrams/ai-assistant-flow.md), [action controls](diagrams/campaign-action-controls.md). Static SVG exports are in `assets/diagrams/`.
+The platform switch decides which workspace you are in. Meta Ads and Google Ads are separate workspaces with their own campaigns, charts and recommendations, and **Combined** puts both side by side. Platform, period and Daily/Monthly live in the URL, so every view can be linked. Pages that cover both platforms (Attribution, AI, System) carry a **Meta + Google** marker.
+
+```bash
+npm ci
+npm run dev:demo      # http://localhost:5173
+```
 
 ## Run and verify
 

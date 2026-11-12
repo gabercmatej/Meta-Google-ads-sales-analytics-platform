@@ -126,16 +126,6 @@ h3 {
   letter-spacing: -0.011em;
 }
 
-.demo-stripes {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    #fbbf24 0,
-    #fbbf24 14px,
-    #fcd34d 14px,
-    #fcd34d 28px
-  );
-}
-
 .tabular {
   font-variant-numeric: tabular-nums;
 }

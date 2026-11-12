@@ -1,16 +1,14 @@
-// Campaign + ad wizard shared by the Create page and the Drafts page.
+// Shared state, validation and helpers for the Meta and Google create wizards.
 // It only ever creates PAUSED objects through the simulated workflow; nothing leaves the browser.
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { CreativeTheme, Platform, ShowcaseCreative } from '@sedem-ads/analytics-core';
-import { Badge, Button, Notice, SimulationNotice, StatList, StatRow, inputCls } from '../components/ui';
-import { AdPreview } from '../components/AdPreview';
-import { CHANNEL_LABEL, OBJECTIVE_LABEL } from '../components/EntityBits';
-import { money } from '../lib/format';
+import { Badge, Button, inputCls } from '../components/ui';
+import { getDataset } from '../lib/data';
 import { useSim } from './simContext';
-import { canWrite, GOOGLE_VALIDATE_ONLY_MESSAGE, VIEWER_TOOLTIP, type CreateResult } from './changeFlow';
+import { canWrite, GOOGLE_VALIDATE_ONLY_MESSAGE, type CreateResult } from './changeFlow';
 import { validateDraft, URL_PREFIX, type DraftErrors } from './draftValidation';
-import type { Draft } from './simCore';
+import type { Draft, WizExtra } from './simCore';
 
 export interface FormState {
   id?: string;
@@ -26,6 +24,7 @@ export interface FormState {
   callToAction: string;
   finalUrl: string;
   theme: CreativeTheme;
+  wiz: WizExtra;
 }
 
 export const OBJECTIVES: Record<Platform, string[]> = {
@@ -43,7 +42,7 @@ export const THEME_OPTIONS: { value: CreativeTheme; label: string }[] = [
   { value: 'deadline', label: 'Deadline' },
   { value: 'property', label: 'Property' },
 ];
-const THEME_COLORS: Record<CreativeTheme, { background: string; accent: string }> = {
+export const THEME_COLORS: Record<CreativeTheme, { background: string; accent: string }> = {
   consultation: { background: '#1e3a8a', accent: '#93c5fd' },
   documents: { background: '#064e3b', accent: '#6ee7b7' },
   family: { background: '#7c2d12', accent: '#fdba74' },
@@ -67,6 +66,7 @@ export function emptyForm(platform: Platform = 'meta'): FormState {
     callToAction: 'Learn more',
     finalUrl: `${URL_PREFIX}/`,
     theme: 'consultation',
+    wiz: defaultWiz(platform),
   };
 }
 
@@ -84,6 +84,7 @@ export function fromDraft(d: Draft): FormState {
     callToAction: d.creative.callToAction,
     finalUrl: d.creative.finalUrl,
     theme: d.creative.theme,
+    wiz: { ...defaultWiz(d.platform), ...(d.wiz ?? {}) },
   };
 }
 
@@ -104,6 +105,7 @@ export function toDraftFields(f: FormState): Omit<Draft, 'id' | 'createdAt' | 'u
     includeAd: f.includeAd,
     adName: f.adName.trim(),
     creative: { headline: f.headline, primaryText: f.primaryText, callToAction: f.callToAction, finalUrl: f.finalUrl, theme: f.theme },
+    wiz: f.wiz,
   };
 }
 
@@ -117,43 +119,104 @@ export function formErrors(f: FormState): DraftErrors {
 export function previewCreative(f: FormState): ShowcaseCreative {
   const headline = f.headline.trim() || 'Your headline';
   const primary = f.primaryText.trim() || 'Your primary text appears here.';
-  const colors = THEME_COLORS[f.theme];
+  const picked = f.wiz.creativeId ? getDataset().creatives.find((c) => c.id === f.wiz.creativeId)?.visual : null;
+  const colors = picked ? { background: picked.background, accent: picked.accent } : THEME_COLORS[f.theme];
+  const heads = (f.wiz.headlines ?? []).map((h) => h.trim()).filter(Boolean);
+  const descs = (f.wiz.descriptions ?? []).map((h) => h.trim()).filter(Boolean);
   const search = f.platform === 'google' && f.objective === 'SEARCH';
   return {
     id: 'draft-preview',
     platform: f.platform,
     format: f.platform === 'meta' ? 'single_image' : search ? 'responsive_search' : f.objective === 'DISPLAY' ? 'responsive_display' : 'pmax_asset_group',
     headline,
-    headlines: [headline],
+    headlines: heads.length ? heads : [headline],
     primaryText: primary,
-    descriptions: [primary],
+    descriptions: descs.length ? descs : [primary],
     callToAction: f.callToAction,
     finalUrl: f.finalUrl,
-    visual: search ? null : { theme: f.theme, ...colors, title: headline, subtitle: 'Demo creative' },
+    visual: search ? null : { theme: picked?.theme ?? f.theme, ...colors, title: headline, subtitle: 'Demo creative' },
   };
 }
 
-type StepId = 'objective' | 'campaign' | 'audience' | 'creative' | 'extras' | 'review' | 'save';
-const STEP_LABEL: Record<StepId, string> = {
-  objective: 'Objective',
-  campaign: 'Campaign',
-  audience: 'Audience',
-  creative: 'Creative',
-  extras: 'Extensions',
-  review: 'Review',
-  save: 'Save draft',
-};
-const STEP_FLOW: Record<Platform, StepId[]> = {
-  meta: ['objective', 'campaign', 'audience', 'creative', 'review', 'save'],
-  google: ['objective', 'campaign', 'audience', 'creative', 'extras', 'review', 'save'],
-};
-const CAMPAIGN_FIELDS: (keyof DraftErrors)[] = ['campaignName', 'dailyBudget'];
-const AD_FIELDS: (keyof DraftErrors)[] = ['adName', 'headline', 'primaryText', 'callToAction', 'finalUrl'];
 
-const labelCls = 'text-xs font-semibold text-ink-2';
-const fieldCls = `${inputCls} !h-9 w-full`;
 
-function Field(props: { id: string; label: string; error?: string; hint?: string; children: (p: { id: string; 'aria-invalid': boolean; 'aria-describedby'?: string; className: string }) => React.ReactNode }) {
+export function defaultWiz(platform: Platform): WizExtra {
+  return platform === 'meta'
+    ? {
+        account: 'Demo Meta account',
+        locations: 'Slovenia',
+        ageMin: 25,
+        ageMax: 55,
+        gender: 'all',
+        interests: '',
+        format: 'single_image',
+        description: '',
+        placementsMode: 'advantage',
+        placements: ['Facebook feed', 'Instagram feed', 'Stories'],
+        schedule: 'daily',
+        lifetimeBudgetText: '300',
+        start: '',
+        end: '',
+      }
+    : {
+        goal: 'LEADS',
+        bidding: 'maximize_conversions',
+        networks: ['Search'],
+        locations: 'Slovenia',
+        languages: 'English',
+        adGroupName: '',
+        keywords: '',
+        assetGroupName: '',
+        headlines: ['', '', ''],
+        descriptions: ['', ''],
+        conversions: [],
+      };
+}
+
+/** Extra wizard rules beyond the base draft validation (local checks only, no Meta or Google call). */
+export function wizardIssues(f: FormState): string[] {
+  const out: string[] = [];
+  const w = f.wiz;
+  if (f.platform === 'meta') {
+    const lo = w.ageMin ?? 18;
+    const hi = w.ageMax ?? 65;
+    if (lo < 18 || hi > 65 || lo > hi) out.push('Age range must be between 18 and 65, with the minimum not above the maximum.');
+    if ((w.placementsMode ?? 'advantage') === 'manual' && (w.placements ?? []).length === 0) out.push('Choose at least one placement, or switch to Advantage+ placements.');
+    if (w.schedule === 'lifetime' && parseBudgetMinor(w.lifetimeBudgetText ?? '') === null) out.push('Enter a lifetime budget in EUR.');
+    if (w.start && w.end && w.end < w.start) out.push('The end date must not be before the start date.');
+  } else {
+    const heads = (w.headlines ?? []).map((h) => h.trim()).filter(Boolean);
+    const descs = (w.descriptions ?? []).map((h) => h.trim()).filter(Boolean);
+    if (f.includeAd) {
+      if (heads.length < 3) out.push('Add at least 3 headlines (up to 15).');
+      if (descs.length < 2) out.push('Add at least 2 descriptions (up to 4).');
+      if ((w.headlines ?? []).some((h) => h.length > 30)) out.push('Each headline must be at most 30 characters.');
+      if ((w.descriptions ?? []).some((h) => h.length > 90)) out.push('Each description must be at most 90 characters.');
+    }
+    if (f.objective === 'SEARCH' && !(w.keywords ?? '').trim()) out.push('Add at least one keyword for the ad group.');
+    if (f.objective === 'PERFORMANCE_MAX' && !(w.assetGroupName ?? '').trim()) out.push('Name the asset group.');
+    if ((w.networks ?? []).length === 0) out.push('Choose at least one network.');
+  }
+  return out;
+}
+
+export function allIssues(f: FormState): string[] {
+  return [...Object.values(formErrors(f)), ...wizardIssues(f)];
+}
+
+export const CAMPAIGN_FIELDS: (keyof DraftErrors)[] = ['campaignName', 'dailyBudget'];
+export const AD_FIELDS: (keyof DraftErrors)[] = ['adName', 'headline', 'primaryText', 'callToAction', 'finalUrl'];
+
+export const labelCls = 'text-xs font-semibold text-ink-2';
+export const fieldCls = `${inputCls} !h-9 w-full`;
+
+export function Field(props: {
+  id: string;
+  label: string;
+  error?: string;
+  hint?: string;
+  children: (p: { id: string; 'aria-invalid': boolean; 'aria-describedby'?: string; className: string }) => ReactNode;
+}) {
   const describedBy = props.error ? `${props.id}-err` : props.hint ? `${props.id}-hint` : undefined;
   return (
     <div className="grid gap-1">
@@ -181,62 +244,92 @@ function Field(props: { id: string; label: string; error?: string; hint?: string
   );
 }
 
-function StepCard(props: { title: string; sub?: string; children: React.ReactNode }) {
+export function StepCard(props: { title: string; sub?: string; children: ReactNode }) {
   return (
-    <section className="card p-4 sm:p-5">
-      <h2 className="text-sm font-semibold text-ink">{props.title}</h2>
-      {props.sub && <p className="mt-0.5 text-xs text-ink-3">{props.sub}</p>}
-      <div className="mt-4 grid gap-4">{props.children}</div>
+    <section className="card p-4 sm:p-6">
+      <h2 className="text-lg font-semibold text-ink">{props.title}</h2>
+      {props.sub && <p className="mt-1 text-sm text-ink-3">{props.sub}</p>}
+      <div className="mt-5 grid gap-4">{props.children}</div>
     </section>
   );
 }
 
-export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => void; onCreated?: (r: CreateResult) => void; idPrefix?: string }) {
+/** Eyebrow + question title above every wizard step. */
+export function StepHeader(props: { n: number; of: number; title: string; sub?: string }) {
+  return (
+    <header>
+      <p className="text-2xs font-semibold uppercase tracking-wider text-ink-3">
+        Step {props.n} of {props.of}
+      </p>
+      <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">{props.title}</h2>
+      {props.sub && <p className="mt-1 text-sm text-ink-3">{props.sub}</p>}
+    </header>
+  );
+}
+
+/** Neutral blue-gray information box with an (i) icon. */
+export function InfoBox({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-snug text-ink-2">
+      <span aria-hidden className="mt-px inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-slate-400 text-[10px] font-semibold leading-none text-slate-500">
+        i
+      </span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+/** Radio card (objective, placements mode, campaign type). */
+export function RadioCard(props: { name: string; checked: boolean; onChange: () => void; title: string; text: string; disabled?: boolean; badge?: ReactNode }) {
+  return (
+    <label
+      className={`flex items-start gap-3 rounded-xl border p-3.5 text-sm transition ${props.disabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${
+        props.checked ? 'border-brand bg-brand-soft/50 ring-1 ring-brand' : 'border-line bg-white hover:border-line-strong'
+      }`}
+    >
+      <input type="radio" name={props.name} className="mt-1" checked={props.checked} disabled={props.disabled} onChange={props.onChange} />
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-2 font-semibold text-ink">
+          {props.title} {props.badge}
+        </span>
+        <span className="mt-0.5 block text-xs text-ink-3">{props.text}</span>
+      </span>
+    </label>
+  );
+}
+
+/** State and actions shared by both wizards. Nothing here ever leaves the browser. */
+export function useWizard(initial: FormState, stepCount: number) {
   const sim = useSim();
-  const [f, setF] = useState<FormState>(props.initial);
+  const [f, setF] = useState<FormState>(initial);
   const [step, setStep] = useState(0);
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
-  const prefix = props.idPrefix ?? 'df';
   const allowed = canWrite(sim.role);
   const errors = useMemo(() => formErrors(f), [f]);
-  const flow = STEP_FLOW[f.platform];
-  const current = flow[Math.min(step, flow.length - 1)] as StepId;
+  const issues = useMemo(() => allIssues(f), [f]);
   const shown = (k: keyof DraftErrors) => (touched.has(k) || touched.has('*') ? errors[k] : undefined);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setF((s) => ({ ...s, [k]: v }));
     setSavedNote(null);
   };
-  const touch = (keys: string[]) => setTouched((t) => new Set([...t, ...keys]));
-  const campaignOk = CAMPAIGN_FIELDS.every((k) => !errors[k]);
-  const adOk = !f.includeAd || AD_FIELDS.every((k) => !errors[k]);
-  const allOk = Object.keys(errors).length === 0;
-
-  const next = () => {
-    if (current === 'campaign') {
-      touch(CAMPAIGN_FIELDS);
-      if (!campaignOk) return;
-    }
-    if (current === 'creative') {
-      touch(AD_FIELDS);
-      if (!adOk) return;
-    }
-    setStep((s) => Math.min(flow.length - 1, s + 1));
+  const setWiz = (patch: Partial<WizExtra>) => {
+    setF((s) => ({ ...s, wiz: { ...s.wiz, ...patch } }));
+    setSavedNote(null);
   };
-
-  const save = () => {
-    const draftFields = toDraftFields({ ...f, campaignName: f.campaignName.trim() || 'Untitled draft' });
-    const saved = sim.saveDraft(draftFields);
+  const touch = (keys: string[]) => setTouched((t) => new Set([...t, ...keys]));
+  const go = (n: number) => setStep(Math.max(0, Math.min(stepCount - 1, n)));
+  const save = (): Draft => {
+    const saved = sim.saveDraft(toDraftFields({ ...f, campaignName: f.campaignName.trim() || 'Untitled draft' }));
     setF((s) => ({ ...s, id: saved.id }));
     setSavedNote(`Draft saved in this browser (${saved.id}). Nothing was sent anywhere.`);
-    props.onSaved?.(saved);
+    return saved;
   };
-
   const create = async () => {
     touch(['*']);
-    if (!allOk) return;
+    if (issues.length > 0) return;
     const d = toDraftFields(f);
     setBusy(true);
     try {
@@ -249,261 +342,45 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
         f.id,
       );
       setResult(r);
-      props.onCreated?.(r);
     } finally {
       setBusy(false);
     }
   };
+  return { sim, f, set, setWiz, setF, step, go, touched, touch, errors, issues, shown, busy, result, setResult, savedNote, setSavedNote, allowed, save, create };
+}
 
-  if (result?.success) {
-    const validatedOnly = result.mode === 'validated_only';
-    return (
-      <div className="card grid gap-3 p-4 sm:p-5" role="status">
-        <div className="grid gap-1 rounded-lg bg-positive-soft p-3 text-sm text-ink">
-          <strong>{validatedOnly ? 'Validated only' : 'Created in simulation (PAUSED)'}</strong>
-          <span>{result.message}</span>
-          {validatedOnly && <span>{GOOGLE_VALIDATE_ONLY_MESSAGE}</span>}
-        </div>
-        {!validatedOnly && (
-          <ul className="grid gap-1.5 pl-5 text-sm">
-            {result.entities.map((e) => (
-              <li key={e.id}>
-                {e.level === 'ad' ? 'Ad' : 'Campaign'} <strong>{e.name}</strong> <Badge tone="warn">{e.status}</Badge> <code className="text-xs">{e.id}</code>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="text-xs text-ink-3">{validatedOnly ? 'The draft is kept so you can adjust it.' : 'Activation is a separate confirmed action: use Resume on the campaign row.'}</p>
-        <div className="flex flex-wrap items-center gap-2">
-          {!validatedOnly && (
-            <Link className="btn btn-primary btn-sm" to="/campaigns">
-              Open campaigns
-            </Link>
-          )}
-          <Link className="btn btn-secondary btn-sm" to="/activity">
-            View activity log
-          </Link>
-          <Button size="sm" variant="ghost" onClick={() => setResult(null)}>
-            Back to the form
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  const objectiveLabel = (o: string) => (f.platform === 'meta' ? OBJECTIVE_LABEL[o] : CHANNEL_LABEL[o]) ?? o;
-  const unit = f.platform === 'meta' ? 'ad set' : 'ad group';
-  const search = f.platform === 'google' && f.objective === 'SEARCH';
-
+export function CreateResultCard({ result, onBack }: { result: CreateResult; onBack: () => void }) {
+  const validatedOnly = result.mode === 'validated_only';
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
-      <div className="grid min-w-0 gap-4">
-        <SimulationNotice />
-        <ol className="no-scrollbar flex gap-2 overflow-x-auto" aria-label="Steps">
-          {flow.map((s, i) => {
-            const done = i < step;
-            const on = i === step;
-            return (
-              <li
-                key={s}
-                data-done={done ? 'true' : undefined}
-                aria-current={on ? 'step' : undefined}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
-                  on ? 'border-brand bg-brand-soft text-brand' : done ? 'border-transparent bg-positive-soft text-positive' : 'border-line bg-slate-50 text-ink-3'
-                }`}
-              >
-                <span className="tabular">{i + 1}.</span> {STEP_LABEL[s]}
-              </li>
-            );
-          })}
-        </ol>
-
-        {current === 'objective' && (
-          <StepCard title={f.platform === 'meta' ? 'Choose an objective' : 'Choose a channel'} sub="Platform and goal of the new campaign. The demo never sends anything to Meta or Google.">
-            <div className="grid gap-1">
-              <label htmlFor={`${prefix}-platform`} className={labelCls}>
-                Platform
-              </label>
-              <select
-                id={`${prefix}-platform`}
-                className={fieldCls}
-                value={f.platform}
-                onChange={(e) => {
-                  const p = e.target.value as Platform;
-                  setStep(0);
-                  setF((s) => ({ ...s, platform: p, objective: OBJECTIVES[p][0] ?? s.objective }));
-                }}
-              >
-                <option value="meta">Meta Ads</option>
-                <option value="google">Google Ads (validate-only)</option>
-              </select>
-            </div>
-            <div className="grid gap-1">
-              <label htmlFor={`${prefix}-objective`} className={labelCls}>
-                {f.platform === 'meta' ? 'Objective' : 'Channel'}
-              </label>
-              <select id={`${prefix}-objective`} className={fieldCls} value={f.objective} onChange={(e) => set('objective', e.target.value)}>
-                {OBJECTIVES[f.platform].map((o) => (
-                  <option key={o} value={o}>
-                    {objectiveLabel(o)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {f.platform === 'google' && <Notice tone="warn">{GOOGLE_VALIDATE_ONLY_MESSAGE}.</Notice>}
-          </StepCard>
-        )}
-
-        {current === 'campaign' && (
-          <StepCard title="Campaign and budget" sub="Name the campaign and set a daily budget in EUR.">
-            <Field id={`${prefix}-name`} label="Campaign name" error={shown('campaignName')}>
-              {(p) => <input {...p} value={f.campaignName} onChange={(e) => set('campaignName', e.target.value)} onBlur={() => touch(['campaignName'])} />}
-            </Field>
-            <Field id={`${prefix}-budget`} label="Daily budget (EUR)" error={shown('dailyBudget')} hint="Between €5.00 and €1,000.00">
-              {(p) => <input {...p} inputMode="decimal" value={f.budgetText} onChange={(e) => set('budgetText', e.target.value)} onBlur={() => touch(['dailyBudget'])} />}
-            </Field>
-            <label className="flex items-center gap-2 text-sm text-ink-2">
-              <input type="checkbox" checked={f.includeAd} onChange={(e) => set('includeAd', e.target.checked)} /> Add a first ad
-            </label>
-          </StepCard>
-        )}
-
-        {current === 'audience' && (
-          <StepCard title={f.platform === 'meta' ? 'Ad set: audience and placements' : 'Ad group: targeting'} sub={`A ${unit} is created together with the campaign.`}>
-            <StatList>
-              <StatRow label={f.platform === 'meta' ? 'Audience' : 'Targeting'} value={f.platform === 'meta' ? 'Broad, Slovenia (demo)' : search ? 'Keywords: demo theme' : 'Automated (demo)'} />
-              <StatRow label={f.platform === 'meta' ? 'Placements' : 'Networks'} value={f.platform === 'meta' ? 'Automatic' : search ? 'Search' : 'Display'} />
-              <StatRow label="Budget" value={money(parseBudgetMinor(f.budgetText))} hint="per day" />
-              <StatRow label="Status after creation" value={<Badge tone="warn">PAUSED</Badge>} />
-            </StatList>
-            <p className="text-xs text-ink-3">The demo uses fixed targeting. In the real product this step edits the {unit}.</p>
-          </StepCard>
-        )}
-
-        {current === 'creative' && (
-          <StepCard title={f.platform === 'meta' ? 'Ad creative' : 'Ad copy'} sub="The preview updates as you type.">
-            {!f.includeAd ? (
-              <p className="text-sm text-ink-3">No ad will be created. Go back to the campaign step to add one.</p>
-            ) : (
-              <>
-                <Field id={`${prefix}-adname`} label="Ad name" error={shown('adName')}>
-                  {(p) => <input {...p} value={f.adName} onChange={(e) => set('adName', e.target.value)} onBlur={() => touch(['adName'])} />}
-                </Field>
-                <Field id={`${prefix}-headline`} label="Headline" error={shown('headline')} hint={`${f.headline.length}/60`}>
-                  {(p) => <input {...p} value={f.headline} onChange={(e) => set('headline', e.target.value)} onBlur={() => touch(['headline'])} />}
-                </Field>
-                <Field id={`${prefix}-text`} label="Primary text" error={shown('primaryText')} hint={`${f.primaryText.length}/300`}>
-                  {(p) => <textarea {...p} className={`${p.className} !h-auto py-2`} rows={3} value={f.primaryText} onChange={(e) => set('primaryText', e.target.value)} onBlur={() => touch(['primaryText'])} />}
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field id={`${prefix}-cta`} label="Call to action" error={shown('callToAction')}>
-                    {(p) => (
-                      <select {...p} value={f.callToAction} onChange={(e) => set('callToAction', e.target.value)}>
-                        {CTA_OPTIONS.map((c) => (
-                          <option key={c}>{c}</option>
-                        ))}
-                      </select>
-                    )}
-                  </Field>
-                  <div className="grid gap-1">
-                    <label htmlFor={`${prefix}-theme`} className={labelCls}>
-                      Visual theme
-                    </label>
-                    <select id={`${prefix}-theme`} className={fieldCls} value={f.theme} onChange={(e) => set('theme', e.target.value as CreativeTheme)}>
-                      {THEME_OPTIONS.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <Field id={`${prefix}-url`} label="Final URL" error={shown('finalUrl')} hint={`Must start with ${URL_PREFIX}/`}>
-                  {(p) => <input {...p} value={f.finalUrl} onChange={(e) => set('finalUrl', e.target.value)} onBlur={() => touch(['finalUrl'])} />}
-                </Field>
-              </>
-            )}
-          </StepCard>
-        )}
-
-        {current === 'extras' && (
-          <StepCard title="Extensions and assets" sub="Google Ads extras that would be attached to the ad.">
-            <StatList>
-              <StatRow label="Sitelinks" value="None (demo)" />
-              <StatRow label="Callouts" value="None (demo)" />
-              <StatRow label="Image assets" value={search ? 'Not used by Search' : 'Generated demo visual'} />
-            </StatList>
-            <p className="text-xs text-ink-3">These are not saved with the draft in the demo.</p>
-          </StepCard>
-        )}
-
-        {(current === 'review' || current === 'save') && (
-          <StepCard
-            title={current === 'review' ? 'Review' : 'Save draft (simulation)'}
-            sub={current === 'review' ? 'Check everything before saving or creating.' : 'Save the draft in this browser, or create the objects in the simulation. Everything is created PAUSED.'}
-          >
-            <StatList>
-              <StatRow label="Platform" value={f.platform === 'meta' ? 'Meta Ads' : 'Google Ads'} />
-              <StatRow label={f.platform === 'meta' ? 'Objective' : 'Channel'} value={objectiveLabel(f.objective)} />
-              <StatRow label="Campaign" value={f.campaignName || '–'} />
-              <StatRow label="Daily budget" value={money(parseBudgetMinor(f.budgetText))} />
-              <StatRow label="Ad" value={f.includeAd ? f.adName || '–' : 'Not included'} />
-              <StatRow label="Status after creation" value={<Badge tone="warn">PAUSED</Badge>} />
-            </StatList>
-            {!allOk && (
-              <ul className="m-0 rounded-lg bg-negative-soft py-2.5 pl-7 pr-3 text-sm text-negative" role="alert">
-                {Object.values(errors).map((m) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
-            )}
-            {f.platform === 'google' && <Notice tone="warn">{GOOGLE_VALIDATE_ONLY_MESSAGE}.</Notice>}
-            <Notice tone="info">New objects are always created PAUSED. Activating them is a separate confirmed action.</Notice>
-            {!allowed && <Notice tone="warn">{VIEWER_TOOLTIP}.</Notice>}
-            {result && !result.success && (
-              <ul className="m-0 rounded-lg bg-negative-soft py-2.5 pl-7 pr-3 text-sm text-negative" role="alert">
-                {result.issues.map((m) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
-            )}
-          </StepCard>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          {step > 0 && (
-            <Button variant="ghost" onClick={() => setStep((s) => Math.max(0, s - 1))}>
-              Back
-            </Button>
-          )}
-          {step < flow.length - 1 && (
-            <Button variant="primary" onClick={next}>
-              Next
-            </Button>
-          )}
-          <Button variant="secondary" onClick={save}>
-            Save as draft
-          </Button>
-          {current === 'save' && (
-            <span title={allowed ? undefined : VIEWER_TOOLTIP}>
-              <Button variant="primary" disabled={!allowed || busy} onClick={() => void create()}>
-                Create (PAUSED)
-              </Button>
-            </span>
-          )}
-        </div>
-        {savedNote && (
-          <p className="text-sm font-semibold text-positive" role="status">
-            {savedNote}
-          </p>
-        )}
+    <div className="card grid gap-3 p-4 sm:p-5" role="status">
+      <div className="grid gap-1 rounded-lg bg-positive-soft p-3 text-sm text-ink">
+        <strong>{validatedOnly ? 'Validated only' : 'Created in simulation (PAUSED)'}</strong>
+        <span>{result.message}</span>
+        {validatedOnly && <span>{GOOGLE_VALIDATE_ONLY_MESSAGE}</span>}
       </div>
-
-      <aside className="card grid gap-3 p-4 lg:sticky lg:top-3" aria-label="Live ad preview">
-        <h3 className="text-sm font-semibold text-ink">Live preview</h3>
-        <AdPreview creative={previewCreative(f)} size="md" />
-        <p className="text-xs text-ink-3">Original demo creative, drawn in the browser. {search ? 'Search ads are text only.' : ''}</p>
-      </aside>
+      {!validatedOnly && (
+        <ul className="grid gap-1.5 pl-5 text-sm">
+          {result.entities.map((e) => (
+            <li key={e.id}>
+              {e.level === 'ad' ? 'Ad' : 'Campaign'} <strong>{e.name}</strong> <Badge tone="neutral">{e.status}</Badge> <code className="text-xs">{e.id}</code>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-ink-3">{validatedOnly ? 'The draft is kept so you can adjust it.' : 'Activation is a separate confirmed action: use Resume on the campaign row.'}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        {!validatedOnly && (
+          <Link className="btn btn-primary btn-sm" to="/campaigns">
+            Open campaigns
+          </Link>
+        )}
+        <Link className="btn btn-secondary btn-sm" to="/activity">
+          View activity log
+        </Link>
+        <Button size="sm" variant="ghost" onClick={onBack}>
+          Back to the form
+        </Button>
+      </div>
     </div>
   );
 }

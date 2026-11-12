@@ -17,7 +17,7 @@ export type Role = 'VIEWER' | 'EDITOR' | 'ADMIN';
 export type Workspace = 'meta' | 'google';
 
 /** Core presets plus two demo-level ones that resolve to fixed ranges of completed days. */
-export type DemoPreset = DatePreset | 'yesterday' | 'thisWeek';
+export type DemoPreset = DatePreset | 'today' | 'yesterday' | 'thisWeek';
 
 export interface PeriodState {
   preset: DemoPreset;
@@ -43,11 +43,13 @@ export interface AppState {
 const Ctx = createContext<AppState | null>(null);
 
 /** Bounds for custom dates: first day of history .. last completed day (today is partial). */
+/** The in-progress reference day; only the Today preset includes it. */
+export const TODAY: ISODate = SHOWCASE_REFERENCE_DATE;
 export const HISTORY_START: ISODate = SHOWCASE_HISTORY_START;
 export const LAST_COMPLETE_DAY: ISODate = addDays(SHOWCASE_REFERENCE_DATE, -1);
 
 const PLATFORMS: readonly PlatformView[] = ['combined', 'meta', 'google'];
-const PRESETS: readonly DemoPreset[] = ['yesterday', 'thisWeek', 'last7', 'last14', 'last30', 'last90', 'thisMonth', 'previousMonth', 'yearToDate', 'custom'];
+const PRESETS: readonly DemoPreset[] = ['today', 'yesterday', 'thisWeek', 'last7', 'last14', 'last30', 'last90', 'thisMonth', 'previousMonth', 'yearToDate', 'custom'];
 
 /** Optional deep-link query parameters: ?platform=meta&period=last90&from=2026-01-01&to=2026-03-31&view=monthly */
 function initialFromUrl(): { platform: PlatformView; period: PeriodState; granularity: Granularity } {
@@ -68,6 +70,7 @@ function weekStart(day: ISODate): ISODate {
 }
 
 export function resolveDemoRange(period: PeriodState): DateRange | null {
+  if (period.preset === 'today') return { start: SHOWCASE_REFERENCE_DATE, end: SHOWCASE_REFERENCE_DATE };
   if (period.preset === 'yesterday') return { start: LAST_COMPLETE_DAY, end: LAST_COMPLETE_DAY };
   if (period.preset === 'thisWeek') {
     const start = weekStart(SHOWCASE_REFERENCE_DATE);
@@ -111,6 +114,7 @@ export function useAppState(): AppState {
 }
 
 export const PRESET_LABELS: Record<DemoPreset, string> = {
+  today: 'Today',
   yesterday: 'Yesterday',
   thisWeek: 'This week',
   last7: 'Last 7 days',
@@ -125,6 +129,7 @@ export const PRESET_LABELS: Record<DemoPreset, string> = {
 
 /** Short labels for the period bar, in the order the product shows them. */
 export const PERIOD_BAR: readonly { key: DemoPreset; label: string }[] = [
+  { key: 'today', label: 'Today' },
   { key: 'yesterday', label: 'Yesterday' },
   { key: 'last7', label: '7 days' },
   { key: 'last14', label: '14 days' },

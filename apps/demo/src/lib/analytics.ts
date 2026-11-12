@@ -32,9 +32,10 @@ export function platformDefs(view: PlatformView, format: (v: number) => string, 
   const kind = opts.kind ?? 'line';
   const stackId = opts.stack ? 'platforms' : undefined;
   const defs: ChartSeries[] = [];
-  if (view !== 'google') defs.push({ key: 'meta', label: 'Meta', color: COLOR.meta, shape: 'circle', kind, stackId, format });
-  if (view !== 'meta') defs.push({ key: 'google', label: 'Google', color: COLOR.google, shape: 'square', kind, stackId, format });
-  if (view === 'combined' && !opts.stack) defs.push({ key: 'total', label: opts.totalLabel ?? 'Combined', color: COLOR.combined, shape: 'triangle', kind: 'line', format });
+  // Legend order: total first (thick dark line), then Meta Ads, then Google Ads.
+  if (view === 'combined' && !opts.stack) defs.push({ key: 'total', label: opts.totalLabel ?? 'Total', color: COLOR.combined, shape: 'triangle', kind: 'line', format });
+  if (view !== 'google') defs.push({ key: 'meta', label: 'Meta Ads', color: COLOR.meta, shape: 'circle', kind, stackId, format });
+  if (view !== 'meta') defs.push({ key: 'google', label: 'Google Ads', color: COLOR.google, shape: 'square', kind, stackId, format });
   return defs;
 }
 

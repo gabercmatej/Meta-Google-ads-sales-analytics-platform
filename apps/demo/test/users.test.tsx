@@ -43,11 +43,10 @@ describe('UsersPage', () => {
 
   it('invite is simulated and sends nothing', () => {
     mount('ADMIN');
-    fireEvent.click(screen.getByRole('button', { name: 'New user' }));
     fireEvent.change(screen.getByPlaceholderText('Analyst D'), { target: { value: 'Analyst D' } });
     fireEvent.change(screen.getByPlaceholderText('analyst.d@example.com'), { target: { value: 'analyst.d@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send invitation (simulated)' }));
-    expect(document.body.textContent).toContain('Demo simulation');
-    expect(document.body.textContent).toContain('was not sent');
+    fireEvent.click(screen.getByRole('button', { name: 'Create user (simulated)' }));
+    expect(document.body.textContent).toContain('Simulated in this browser');
+    expect(document.body.textContent).toContain('No e-mail, password or external service was used');
   });
 });

@@ -21,8 +21,8 @@ import type {
 /** Fixed demo clock: 2026-11-11 11:00 in Europe/Ljubljana. Today is a partial (incomplete) day. */
 export const SHOWCASE_REFERENCE_NOW = '2026-11-11T10:00:00.000Z';
 export const SHOWCASE_REFERENCE_DATE: ISODate = '2026-11-11';
-/** First day of generated history (13+ calendar months before the reference date). */
-export const SHOWCASE_HISTORY_START: ISODate = '2025-10-01';
+/** First day of generated history (24+ months before the reference date, so "Last 365 days" and "This year" have full comparison periods). */
+export const SHOWCASE_HISTORY_START: ISODate = '2024-11-01';
 export const SHOWCASE_SEED = 20261111;
 
 export type PlatformView = 'combined' | Platform;
@@ -181,8 +181,10 @@ export interface ShowcaseDataset extends SyntheticDataset {
 export interface ShowcasePlanted {
   underperformingCampaignId: string;
   fatiguedAdId: string;
-  googleMissingDate: ISODate;
-  metaSourceErrorDate: ISODate;
+  /** Null unless generated with `plantedGaps: true`. */
+  googleMissingDate: ISODate | null;
+  /** Null unless generated with `plantedGaps: true`. */
+  metaSourceErrorDate: ISODate | null;
   partialDate: ISODate;
   labelOnlyGoogleOrderId: string;
   conflictOrderId: string;
@@ -297,6 +299,8 @@ export interface SalesSeriesPoint {
   incomplete: boolean;
   /** source key -> paid revenue in minor units. */
   bySource: Record<string, number>;
+  /** source key -> paid order count. */
+  ordersBySource: Record<string, number>;
   totalMinor: number;
   orders: number;
 }

@@ -58,7 +58,7 @@ const group = (name: string, targeting: string, share: number, ads: AdSpec[], en
 export const CAMPAIGN_SPECS: CampaignSpec[] = [
   {
     id: 'meta-c1', platform: 'meta', name: 'Consultations | Prospecting', objective: 'LEADS', channelType: null, tier: 'strong',
-    base: 3000, ctr: 0.019, cpcMinor: 52, leadRate: 0.05, leadQuality: 1.2, start: '2025-10-01', end: null, budgetLevel: 'campaign',
+    base: 3000, ctr: 0.019, cpcMinor: 52, leadRate: 0.05, leadQuality: 1.2, start: '2024-11-01', end: null, budgetLevel: 'campaign',
     themes: ['consultation', 'business', 'family'], underperforming: false,
     groups: [
       group('Adults 30-55 | Slovenia | small business owners', 'Adults 30-55, Slovenia, interests: small business', 0.45, [ad(0.55, 'single_image'), ad(0.45, 'carousel', 60)]),
@@ -68,7 +68,7 @@ export const CAMPAIGN_SPECS: CampaignSpec[] = [
   },
   {
     id: 'meta-c2', platform: 'meta', name: 'Retargeting | Site visitors', objective: 'LEADS', channelType: null, tier: 'average',
-    base: 1400, ctr: 0.026, cpcMinor: 80, leadRate: 0.08, leadQuality: 1.0, start: '2025-10-01', end: null, budgetLevel: 'ad_group',
+    base: 1400, ctr: 0.026, cpcMinor: 80, leadRate: 0.08, leadQuality: 1.0, start: '2024-11-01', end: null, budgetLevel: 'ad_group',
     themes: ['deadline', 'consultation', 'documents'], underperforming: false,
     groups: [
       group('Visitors 30 days', 'Website visitors in the last 30 days', 0.6, [ad(0.55, 'single_image'), ad(0.45, 'video')]),
@@ -77,7 +77,7 @@ export const CAMPAIGN_SPECS: CampaignSpec[] = [
   },
   {
     id: 'meta-c3', platform: 'meta', name: 'Lookalike Test | Broad', objective: 'LEADS', channelType: null, tier: 'weak',
-    base: 2400, ctr: 0.011, cpcMinor: 45, leadRate: 0.028, leadQuality: 0.45, start: '2025-10-01', end: null, budgetLevel: 'campaign',
+    base: 2400, ctr: 0.011, cpcMinor: 45, leadRate: 0.028, leadQuality: 0.45, start: '2024-11-01', end: null, budgetLevel: 'campaign',
     themes: ['brand', 'chat', 'property'], underperforming: true, rampDownLeads: true,
     groups: [
       group('Broad | Slovenia 25-65', 'Adults 25-65, Slovenia, broad targeting', 0.6, [ad(0.5, 'single_image'), ad(0.5, 'video')]),
@@ -86,7 +86,7 @@ export const CAMPAIGN_SPECS: CampaignSpec[] = [
   },
   {
     id: 'meta-c4', platform: 'meta', name: 'Guides and Templates | Traffic', objective: 'TRAFFIC', channelType: null, tier: 'average',
-    base: 900, ctr: 0.014, cpcMinor: 30, leadRate: 0, leadQuality: 1.0, start: '2025-10-01', end: null, budgetLevel: 'campaign',
+    base: 900, ctr: 0.014, cpcMinor: 30, leadRate: 0, leadQuality: 1.0, start: '2024-11-01', end: null, budgetLevel: 'campaign',
     themes: ['documents', 'family'], underperforming: false,
     groups: [
       group('Readers | legal basics', 'Adults 25-60, Slovenia, interests: personal finance', 0.55, [ad(0.5, 'single_image'), ad(0.5, 'carousel')]),
@@ -122,7 +122,7 @@ export const CAMPAIGN_SPECS: CampaignSpec[] = [
   },
   {
     id: 'google-c1', platform: 'google', name: 'Search | Core Services', objective: null, channelType: 'SEARCH', tier: 'strong',
-    base: 1700, ctr: 0.028, cpcMinor: 135, leadRate: 0.09, leadQuality: 1.25, start: '2025-10-01', end: null, budgetLevel: 'ad_group',
+    base: 1700, ctr: 0.028, cpcMinor: 135, leadRate: 0.09, leadQuality: 1.25, start: '2024-11-01', end: null, budgetLevel: 'ad_group',
     themes: [], underperforming: false,
     groups: [
       group('Contract review', 'Keywords: contract review, check my contract', 0.55, [ad(0.55, 'responsive_search'), ad(0.45, 'responsive_search', 45)]),
@@ -131,7 +131,7 @@ export const CAMPAIGN_SPECS: CampaignSpec[] = [
   },
   {
     id: 'google-c2', platform: 'google', name: 'Search | Brand Terms', objective: null, channelType: 'SEARCH', tier: 'average',
-    base: 600, ctr: 0.03, cpcMinor: 60, leadRate: 0.07, leadQuality: 1.1, start: '2025-10-01', end: null, budgetLevel: 'campaign',
+    base: 600, ctr: 0.03, cpcMinor: 60, leadRate: 0.07, leadQuality: 1.1, start: '2024-11-01', end: null, budgetLevel: 'campaign',
     themes: [], underperforming: false,
     groups: [
       group('Brand name', 'Keywords: brand name and close variants', 0.65, [ad(0.6, 'responsive_search'), ad(0.4, 'responsive_search')]),
@@ -140,7 +140,7 @@ export const CAMPAIGN_SPECS: CampaignSpec[] = [
   },
   {
     id: 'google-c3', platform: 'google', name: 'Display | Broad Awareness', objective: null, channelType: 'DISPLAY', tier: 'weak',
-    base: 700, ctr: 0.009, cpcMinor: 35, leadRate: 0.008, leadQuality: 0.5, start: '2025-10-01', end: null, budgetLevel: 'campaign',
+    base: 700, ctr: 0.009, cpcMinor: 35, leadRate: 0.008, leadQuality: 0.5, start: '2024-11-01', end: null, budgetLevel: 'campaign',
     themes: ['brand', 'consultation', 'documents'], underperforming: false,
     groups: [
       group('In-market: legal services', 'In-market audience: legal services, Slovenia', 0.6, [ad(0.5, 'responsive_display'), ad(0.5, 'responsive_display')]),

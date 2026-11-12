@@ -9,11 +9,12 @@ import { COLOR } from '../components/charts/colors';
 import { AdPreview } from '../components/AdPreview';
 import { ChangeText, HintBadges, PlatformBadge, CHANNEL_LABEL, OBJECTIVE_LABEL } from '../components/EntityBits';
 import { CoverageNotes } from '../components/Notes';
-import { METRIC_FORMAT } from '../components/OverviewCharts';
+import { METRIC_FORMAT, Spark } from '../components/OverviewCharts';
 import { EntityActions, useSim } from '../sim/SimProvider';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
 import { campaignSeries } from '../lib/analytics';
+import { isPmax, resultTrend } from '../lib/campaignView';
 import { count, date, dateRange, money, pct } from '../lib/format';
 
 type Metric = 'spend' | 'clicks' | 'leads' | 'ctr' | 'cpc' | 'cpl';
@@ -86,7 +87,9 @@ export default function CampaignDetailPage() {
   const chartRows = campaignSeries(ds, { campaignId: campaign.id, platform: campaign.platform, metric, range, granularity });
   const assistantQ = encodeURIComponent(`How is the campaign "${name}" performing in ${dateRange(range)}? What would you change?`);
   const color = campaign.platform === 'meta' ? COLOR.meta : COLOR.google;
-  const groupWord = campaign.platform === 'meta' ? 'Ad set' : 'Ad group';
+  const pmax = isPmax(ds, campaign.id);
+  const groupWord = campaign.platform === 'meta' ? 'Ad set' : pmax ? 'Asset group' : 'Ad group';
+  const spark = <Spark values={resultTrend(ds, row, 'leads', range)} color={color} label="Leads per day" />;
   const kind = campaign.objective ? OBJECTIVE_LABEL[campaign.objective] : campaign.channelType ? CHANNEL_LABEL[campaign.channelType] : '–';
   const metricTotal = metric === 'spend' ? money(c.spendMinor) : metric === 'clicks' ? count(c.clicks) : metric === 'leads' ? count(c.leads) : metric === 'ctr' ? pct(c.ctr) : metric === 'cpc' ? money(c.cpcMinor) : money(c.cplMinor);
   const shape = campaign.platform === 'meta' ? 'circle' : 'square';
@@ -129,7 +132,7 @@ export default function CampaignDetailPage() {
         <KpiCard label="Clicks" value={count(c.clicks)} delta={delta(c.clicks, p.clicks)} comparison="vs previous" state={st(c.clicks)} />
         <KpiCard label="CTR" value={pct(c.ctr)} delta={delta(c.ctr, p.ctr)} comparison="vs previous" state={st(c.ctr)} />
         <KpiCard label="CPC" value={money(c.cpcMinor)} delta={delta(c.cpcMinor, p.cpcMinor, 'down')} comparison="vs previous" state={st(c.cpcMinor)} />
-        <KpiCard label="Leads" value={count(c.leads)} delta={delta(c.leads, p.leads)} comparison="vs previous" state={st(c.leads)} series="meta-leads" />
+        <KpiCard label="Leads" value={count(c.leads)} delta={delta(c.leads, p.leads)} comparison="vs previous" state={st(c.leads)} series="meta-leads" sparkline={spark} />
         <KpiCard label="CPL" value={money(c.cplMinor)} delta={delta(c.cplMinor, p.cplMinor, 'down')} comparison="vs previous" state={c.cplMinor === null ? 'no_calc' : 'ok'} reason="No leads in this period" />
       </div>
 
@@ -197,7 +200,7 @@ export default function CampaignDetailPage() {
                   return (
                     <tr key={g.id}>
                       <td className="nav-stick nav-stick-edge px-3 py-2.5" style={{ left: 0, maxWidth: 320 }}>
-                        <div className="truncate font-semibold text-ink" title={gn}>{gn}</div>
+                        <Link to={`/campaigns?platform=${campaign.platform}&level=ads&campaign=${campaign.id}&adset=${g.id}`} className="block truncate font-semibold text-ink hover:text-brand hover:underline" title={gn}>{gn}</Link>
                         {targeting && <div className="truncate text-2xs text-slate-500" title={targeting}>{targeting}</div>}
                       </td>
                       <td className="px-3"><StatusPill status={gs} /></td>
@@ -220,7 +223,7 @@ export default function CampaignDetailPage() {
         </div>
       </Section>
 
-      <Section title="Ads">
+      <Section title={pmax ? 'Asset-group ads (combined assets)' : 'Ads'}>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {data.ads.map((a) => {
             const creative = ds.creatives.find((x) => x.id === a.creativeId);
@@ -231,7 +234,7 @@ export default function CampaignDetailPage() {
               <article className="card cmp-card flex flex-col gap-3 p-4" key={a.id}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold text-ink" title={an}>{an}</h3>
+                    <h3 className="truncate text-sm font-semibold text-ink" title={an}><Link to={`/ads/${a.id}?platform=${a.platform}`} className="hover:text-brand hover:underline">{an}</Link></h3>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <StatusPill status={as} /> <HintBadges row={a} />
                     </div>

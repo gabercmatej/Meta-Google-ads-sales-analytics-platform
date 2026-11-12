@@ -5,7 +5,7 @@
 //   SCREENSHOTS=assets/screenshots node scripts/browser-test.mjs   also capture README screenshots
 //
 // Every page is opened at desktop and phone size. A page fails on: a console error, a CSP violation,
-// a request to any other host, horizontal overflow, a missing heading or a missing demo banner.
+// a request to any other host, horizontal overflow, a missing heading or a missing DEMO badge.
 // The flows then exercise the interactive features end to end.
 import { createServer } from 'node:http';
 import { readFile, stat, mkdir } from 'node:fs/promises';
@@ -25,8 +25,12 @@ const PAGES = [
   ['/campaigns?platform=meta', 'Campaigns'],
   ['/campaigns?platform=google', 'Campaigns'],
   ['/campaigns/meta-c1?platform=meta', ''],
+  ['/campaigns?platform=meta&level=adsets&campaign=meta-c1', 'Campaigns'],
+  ['/campaigns?platform=meta&level=ads&campaign=meta-c1', 'Campaigns'],
+  ['/campaigns?platform=google&level=adsets&campaign=google-c4', 'Campaigns'],
+  ['/ads/meta-c1-g1-a1?platform=meta', ''],
   ['/create?platform=meta', 'Create'],
-  ['/create?platform=google', 'Create'],
+  ['/create?platform=google', 'New Google campaign'],
   ['/drafts', 'Drafts'],
   ['/sales', 'Sales'],
   ['/leads', 'Leads'],
@@ -84,7 +88,7 @@ function check(ok, label) {
 }
 
 async function newPage(browser, base, vp) {
-  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: vp.isMobile, hasTouch: vp.hasTouch, deviceScaleFactor: SHOTS ? 2 : 1, colorScheme: 'light', reducedMotion: 'reduce' });
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: vp.isMobile, hasTouch: vp.hasTouch, deviceScaleFactor: 1, colorScheme: 'light', reducedMotion: 'reduce' });
   const page = await context.newPage();
   const problems = [];
   const origin = new URL(base).origin;
@@ -118,8 +122,12 @@ async function sweep(browser, base) {
       await h1.waitFor({ timeout: 8000 }).catch(() => {});
       const title = (await h1.textContent().catch(() => '')) ?? '';
       check(title.toLowerCase().includes(heading.toLowerCase()), `${vp.name} ${path}: heading contains "${heading}" (got "${title}")`);
-      const banner = await page.getByText(/all data shown is synthetic/i).first().isVisible().catch(() => false);
-      check(banner, `${vp.name} ${path}: demo banner visible`);
+      const badge = await page.getByTestId('demo-badge').isVisible().catch(() => false);
+      check(badge, `${vp.name} ${path}: DEMO badge visible`);
+      const noStripe = await page.locator('.demo-stripes').count();
+      check(noStripe === 0, `${vp.name} ${path}: no full-width demo banner`);
+      const yellow = await page.evaluate(() => [...document.querySelectorAll('main *')].filter((el) => { const r = el.getBoundingClientRect(); if (r.width < 240 || r.height < 28) return false; const m = getComputedStyle(el).backgroundColor.match(/[0-9.]+/g); if (!m) return false; const [R, G, B, A = 1] = m.map(Number); return A > 0.2 && R > 200 && G > 150 && B < 190 && R - B > 60; }).length);
+      check(yellow === 0, `${vp.name} ${path}: no yellow/amber panels (${yellow})`);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       check(overflow <= 1, `${vp.name} ${path}: no horizontal overflow (${overflow}px)`);
       const crashed = await page.getByText(/Unexpected Application Error|not implemented/i).count();

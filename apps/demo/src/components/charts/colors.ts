@@ -4,9 +4,11 @@
 export type MarkerShape = 'circle' | 'square' | 'triangle' | 'diamond';
 
 export const COLOR = {
-  meta: '#0866ff',
-  google: '#f59e0b',
-  combined: '#4f46e5',
+  meta: '#2563eb',
+  google: '#ea8a1a',
+  combined: '#1f2937',
+  subtotal: '#6d28d9',
+  chatbot: '#db2777',
   neutral: '#64748b',
   good: '#059669',
   bad: '#dc2626',
@@ -27,9 +29,9 @@ export const SOURCE_LABEL: Record<string, string> = {
 };
 
 export const SOURCE_COLOR: Record<string, string> = {
-  meta: '#0866ff',
-  google: '#f59e0b',
-  chatbot_ai: '#8b5cf6',
+  meta: '#2563eb',
+  google: '#ea8a1a',
+  chatbot_ai: '#db2777',
   partner_portal: '#14b8a6',
   other_verified: '#64748b',
   unknown: '#cbd5e1',
@@ -37,7 +39,7 @@ export const SOURCE_COLOR: Record<string, string> = {
 };
 
 /** Palette for comparing individual ads (up to 4), independent of platform colours. */
-export const AD_COLORS = ['#4f46e5', '#0d9488', '#db2777', '#ca8a04'] as const;
+export const AD_COLORS = ['#2563eb', '#ea8a1a', '#059669', '#7c3aed'] as const;
 
 export function sourceLabel(key: string): string {
   return SOURCE_LABEL[key] ?? key;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Badge, Button, Dialog, SimulationNotice } from '../components/ui';
 import { getDataset } from '../lib/data';
 import type { EntityRef } from './contract';
@@ -33,6 +34,7 @@ function withCreative(e: EntityRef): EffectiveEntity {
 export function EntityActions(props: { entity: EntityRef; compact?: boolean }) {
   const sim = useSim();
   const [kind, setKind] = useState<Kind | null>(null);
+  const navigate = useNavigate();
   const overlay = sim.overlay(props.entity.id);
   const entity = useMemo(() => effectiveEntity(withCreative(props.entity), overlay), [props.entity, overlay]);
   const allowed = canWrite(sim.role);
@@ -41,7 +43,7 @@ export function EntityActions(props: { entity: EntityRef; compact?: boolean }) {
   const hasBudget = entity.dailyBudgetMinor !== null;
   const toggle: Kind = entity.status === 'ACTIVE' ? 'pause' : 'resume';
   return (
-    <span className="inline-flex flex-wrap items-center gap-1" data-compact={props.compact ? 'true' : undefined}>
+    <span className={`inline-flex items-center gap-1 ${props.compact ? "flex-nowrap whitespace-nowrap" : "flex-wrap"}`} data-compact={props.compact ? 'true' : undefined}>
       <span title={tip}>
         <Button size={size} variant="secondary" disabled={!allowed} onClick={() => setKind(toggle)} aria-label={`${KIND_TITLE[toggle]} ${entity.name}`}>
           {KIND_TITLE[toggle]}
@@ -57,8 +59,34 @@ export function EntityActions(props: { entity: EntityRef; compact?: boolean }) {
           Edit
         </Button>
       </span>
+      {props.entity.level === 'campaign' && (
+        <span title={tip ?? 'Copy this campaign into a local draft'}>
+          <Button
+            size={size}
+            variant="ghost"
+            disabled={!allowed}
+            aria-label={`Duplicate ${entity.name} as draft`}
+            onClick={() => {
+              const ds = getDataset();
+              const src = ds.campaigns.find((c) => c.id === props.entity.id);
+              const draft = sim.saveDraft({
+                platform: entity.platform,
+                campaignName: `Copy of ${entity.name}`.slice(0, 120),
+                objective: src?.objective ?? src?.channelType ?? (entity.platform === 'meta' ? 'LEADS' : 'SEARCH'),
+                dailyBudgetMinor: entity.dailyBudgetMinor,
+                includeAd: false,
+                adName: '',
+                creative: { headline: '', primaryText: '', callToAction: 'Learn more', finalUrl: 'https://example.com/', theme: 'consultation' },
+              });
+              navigate(`/drafts?platform=${entity.platform}&highlight=${draft.id}`);
+            }}
+          >
+            Duplicate
+          </Button>
+        </span>
+      )}
       {overlay?.validatedOnly && (
-        <Badge tone="warn" title="A change was validated but not applied (Google is validate-only in this demo)">
+        <Badge tone="neutral" title="A change was validated but not applied (Google is validate-only in this demo)">
           Validated only
         </Badge>
       )}

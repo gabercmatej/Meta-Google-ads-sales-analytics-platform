@@ -14,6 +14,36 @@ export interface DraftCreative {
   theme: CreativeTheme;
 }
 
+/** Optional wizard-only fields kept with a draft so it can be reopened exactly as left. */
+export interface WizExtra {
+  account?: string;
+  locations?: string;
+  ageMin?: number;
+  ageMax?: number;
+  gender?: 'all' | 'women' | 'men';
+  interests?: string;
+  format?: 'single_image' | 'carousel' | 'video';
+  description?: string;
+  creativeId?: string;
+  placementsMode?: 'advantage' | 'manual';
+  placements?: string[];
+  schedule?: 'daily' | 'lifetime';
+  lifetimeBudgetText?: string;
+  start?: string;
+  end?: string;
+  /** Google */
+  goal?: string;
+  bidding?: string;
+  networks?: string[];
+  languages?: string;
+  adGroupName?: string;
+  keywords?: string;
+  assetGroupName?: string;
+  headlines?: string[];
+  descriptions?: string[];
+  conversions?: string[];
+}
+
 /** A locally saved, not-yet-created campaign (+ optional first ad). Never sent anywhere. */
 export interface Draft {
   id: string;
@@ -25,6 +55,8 @@ export interface Draft {
   includeAd: boolean;
   adName: string;
   creative: DraftCreative;
+  wiz?: WizExtra;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
 }

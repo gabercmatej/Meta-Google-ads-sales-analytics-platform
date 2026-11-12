@@ -563,9 +563,13 @@ export function salesSeries(
   const points = new Map<string, SalesSeriesPoint>(
     keys.map((key) => {
       const bySource: Record<string, number> = {};
-      for (const s of DEFAULT_SOURCES) bySource[s] = 0;
+      const ordersBySource: Record<string, number> = {};
+      for (const s of DEFAULT_SOURCES) {
+        bySource[s] = 0;
+        ordersBySource[s] = 0;
+      }
       const incomplete = args.granularity === 'daily' ? key >= ds.referenceDate : monthEnd(key) >= ds.referenceDate;
-      return [key, { key, label: args.granularity === 'daily' ? dayLabel(key) : monthLabel(key), incomplete, bySource, totalMinor: 0, orders: 0 }];
+      return [key, { key, label: args.granularity === 'daily' ? dayLabel(key) : monthLabel(key), incomplete, bySource, ordersBySource, totalMinor: 0, orders: 0 }];
     }),
   );
   for (const o of ds.orders) {
@@ -574,6 +578,7 @@ export function salesSeries(
     if (!inRange(day, args.range)) continue;
     const p = points.get(keyOf(day))!;
     p.bySource[o.source] = (p.bySource[o.source] ?? 0) + o.amountMinor;
+    p.ordersBySource[o.source] = (p.ordersBySource[o.source] ?? 0) + 1;
     p.totalMinor += o.amountMinor;
     p.orders += 1;
   }
@@ -704,7 +709,8 @@ export function leadsSeries(
 // data sources
 
 export function dataSourceStatus(ds: ShowcaseDataset): DataSourceStatus[] {
-  const issues = (s: DataSourceId): DataSourceStatus['issues'] => ds.sourceDays.filter((d) => d.source === s).sort((a, b) => (a.date < b.date ? -1 : 1));
+  // Today (the reference date) is simply still in progress. It is not a gap and not listed as an issue.
+  const issues = (s: DataSourceId): DataSourceStatus['issues'] => ds.sourceDays.filter((d) => d.source === s && !(d.status === 'partial' && d.date === ds.referenceDate)).sort((a, b) => (a.date < b.date ? -1 : 1));
   const rows = (p: Platform): number => ds.daily.filter((r) => r.platform === p).length;
   const entries: [DataSourceId, string, string, number][] = [
     ['meta', 'Meta Ads', 'Simulated daily ad-level performance rows (spend, impressions, clicks, leads).', rows('meta')],

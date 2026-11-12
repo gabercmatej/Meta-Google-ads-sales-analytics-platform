@@ -36,13 +36,16 @@ function mount(path: string) {
 const sw = () => within(screen.getByRole('navigation', { name: 'Platform' }));
 
 describe('app shell', () => {
-  it('renders grouped navigation and the DEMO banner', () => {
+  it('renders grouped navigation and a compact DEMO badge', () => {
     mount('/overview');
     const nav = screen.getAllByRole('navigation', { name: 'Meta Center' })[0]!;
     for (const label of ['Overview', 'Campaigns & ads', 'Sales', 'Attribution', 'AI assistant', 'Data sources']) {
       expect(within(nav).getAllByText(label).length).toBeGreaterThan(0);
     }
-    expect(document.body.textContent).toContain('all data shown is synthetic');
+    expect(screen.getByTestId('demo-badge')).toBeTruthy();
+    expect(document.querySelector('.demo-stripes')).toBeNull();
+    fireEvent.click(screen.getByTestId('demo-badge'));
+    expect(screen.getByRole('tooltip').textContent).toContain('Synthetic data. No real accounts, customers or campaigns.');
   });
 
   it('shows the fixed Meta + Google pill on shared pages only', () => {

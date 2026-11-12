@@ -41,5 +41,6 @@ export const COMBINED_PATH = '/combined';
 
 /** Longest matching route (so /campaigns/x still marks Campaigns & ads). */
 export function routeFor(pathname: string): RouteDef | undefined {
+  if (pathname.startsWith('/ads/')) return ROUTES.find((r) => r.path === '/campaigns');
   return ROUTES.filter((r) => pathname === r.path || pathname.startsWith(`${r.path}/`)).sort((a, b) => b.path.length - a.path.length)[0];
 }

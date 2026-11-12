@@ -18,3 +18,13 @@
   body.printing-chart .print-sheet { display: block !important; width: 100%; }
   body.printing-chart .print-sheet svg { max-width: 100% !important; height: auto !important; }
 }
+
+/* Chart print sheet: values table and footer */
+@media print {
+  body.printing-chart .print-sheet { font-family: Helvetica, Arial, sans-serif; color: #000; }
+  body.printing-chart .print-values table { font-size: 9px; width: 100%; border-collapse: collapse; }
+  body.printing-chart .print-values th, body.printing-chart .print-values td { border-bottom: 1px solid #ddd; padding: 2px 6px; position: static !important; background: #fff !important; }
+  body.printing-chart .print-values thead { display: table-header-group; }
+  body.printing-chart .print-values tr { break-inside: avoid; }
+  body.printing-chart .print-sheet svg path, body.printing-chart .print-sheet svg line { stroke-dasharray: none !important; }
+}

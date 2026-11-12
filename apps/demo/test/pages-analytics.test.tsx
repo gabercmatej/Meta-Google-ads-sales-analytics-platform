@@ -27,7 +27,7 @@ describe('analytics pages with the simulated dataset', () => {
   it('Overview renders KPIs, the surplus caveat and no MER', () => {
     mount('/overview', <OverviewPage />, '/overview');
     expect(screen.getAllByText('Spend').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Attributable ROAS').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Estimated ROAS').length).toBeGreaterThan(0);
     expect(document.body.textContent).toContain('Surplus is not profit: revenue includes 22% VAT and excludes other costs');
     expect(document.body.textContent).not.toMatch(/\bMER\b/);
   });
@@ -37,7 +37,7 @@ describe('analytics pages with the simulated dataset', () => {
     expect(document.body.textContent).toContain('Unknown');
     expect(document.body.textContent).toContain('Reconciliation');
     expect(document.body.textContent).not.toContain('do NOT equal');
-    fireEvent.click(screen.getByRole('button', { name: 'Order date' }));
+    fireEvent.click(screen.getByRole('button', { name: 'By order date (as in CRM)' }));
     expect(document.body.textContent).not.toContain('do NOT equal');
   });
 
@@ -52,9 +52,9 @@ describe('analytics pages with the simulated dataset', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('Comparison preselects three ads and honours ?ads=', () => {
+  it('Comparison preselects two ads and honours ?ads=', () => {
     mount('/compare', <ComparisonPage />, '/compare');
-    expect(document.querySelectorAll('.cmp-card').length).toBe(3);
+    expect(document.querySelectorAll(".cmp-card").length).toBe(2);
     cleanup();
     const ads = getDataset().ads.slice(0, 2).map((a) => a.id).join(',');
     mount('/compare?ads=' + ads, <ComparisonPage />, '/compare');

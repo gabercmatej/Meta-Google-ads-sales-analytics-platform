@@ -1,67 +1,80 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import {
-  adSeries,
-  compareEntities,
-  DEFAULT_VOLUME_GUARD,
-  entityPerformance,
-  type EntityMetricName,
-  type EntityPerformanceRow,
-} from '@sedem-ads/analytics-core';
-import { Badge, Button, EmptyState, PageTitle, Segmented, Value, inputCls } from '../components/ui';
+import { adSeries, DEFAULT_VOLUME_GUARD, entityPerformance, type EntityMetrics, type EntityPerformanceRow, type SeriesMetric } from '@sedem-ads/analytics-core';
+import { Badge, Button, EmptyState, Notice, PageTitle, inputCls } from '../components/ui';
 import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
 import { TimeSeriesChart, type ChartRow, type ChartSeries } from '../components/charts/TimeSeriesChart';
 import { AD_COLORS, SHAPES } from '../components/charts/colors';
 import { AdPreview } from '../components/AdPreview';
 import { PlatformBadge, StatusBadge } from '../components/EntityBits';
-import { Notice } from '../components/ui';
 import { METRIC_FORMAT } from '../components/OverviewCharts';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
-import { count, dateRange, money, pct } from '../lib/format';
+import { count, dateRange, money, pct, change } from '../lib/format';
+import { bestId, buildVerdict, judge, relChange, type CmpMetric, type Verdict } from '../lib/compareLogic';
 
 const MAX_ADS = 4;
 const MIN_ADS = 2;
+const LETTERS = ['A', 'B', 'C', 'D'] as const;
 
-type TrendMetric = 'ctr' | 'cpc' | 'cpl' | 'spend' | 'clicks' | 'leads';
-const TREND: { value: TrendMetric; label: string }[] = [
-  { value: 'ctr', label: 'CTR' },
-  { value: 'cpc', label: 'CPC' },
-  { value: 'cpl', label: 'CPL' },
-  { value: 'spend', label: 'Spend' },
-  { value: 'clicks', label: 'Clicks' },
-  { value: 'leads', label: 'Leads' },
+interface RowDef {
+  key: CmpMetric;
+  label: string;
+  get: (m: EntityMetrics) => number | null;
+  fmt: (n: number) => string;
+}
+
+const ROWS: RowDef[] = [
+  { key: 'spend', label: 'Spend', get: (m) => m.spendMinor, fmt: (n) => money(n) },
+  { key: 'impressions', label: 'Impressions', get: (m) => m.impressions, fmt: (n) => count(n) },
+  { key: 'clicks', label: 'Clicks', get: (m) => m.clicks, fmt: (n) => count(n) },
+  { key: 'leads', label: 'Leads', get: (m) => m.leads, fmt: (n) => count(n) },
+  { key: 'ctr', label: 'CTR', get: (m) => m.ctr, fmt: (n) => pct(n) },
+  { key: 'cpc', label: 'CPC', get: (m) => m.cpcMinor, fmt: (n) => money(n) },
+  { key: 'cpm', label: 'CPM', get: (m) => m.cpmMinor, fmt: (n) => money(n) },
+  { key: 'cpl', label: 'CPL', get: (m) => m.cplMinor, fmt: (n) => money(n) },
+  { key: 'orders', label: 'Verified orders', get: (m) => m.verifiedOrders, fmt: (n) => count(n) },
+  { key: 'revenue', label: 'Verified revenue', get: (m) => m.verifiedRevenueMinor, fmt: (n) => money(n) },
 ];
 
-const TABLE_METRICS: { key: EntityMetricName; label: string; fmt: (n: number) => string }[] = [
-  { key: 'ctr', label: 'CTR', fmt: (n) => pct(n) },
-  { key: 'cpc', label: 'CPC', fmt: (n) => money(n) },
-  { key: 'cpm', label: 'CPM', fmt: (n) => money(n) },
-  { key: 'cpl', label: 'CPL', fmt: (n) => money(n) },
-  { key: 'conversionRate', label: 'Lead rate (leads per click)', fmt: (n) => pct(n) },
-];
+const TREND_METRICS: SeriesMetric[] = ['ctr', 'cpc', 'cpl', 'leads', 'spend', 'clicks'];
 
-/** Best three ads by CPL with enough volume, plus the planted fatigued ad when it belongs to this workspace. */
-function defaultSelection(rows: readonly EntityPerformanceRow[], fatiguedId: string): string[] {
+/** Arrow + colour for a judged change. Costs: down is green. Neutral metrics stay grey. */
+function DeltaChip({ metric, value, reference, label }: { metric: CmpMetric; value: number | null; reference: number | null; label: string }) {
+  const rel = relChange(value, reference);
+  const v: Verdict = judge(metric, value, reference);
+  if (rel === null) return <span className="text-2xs text-ink-3">{label} –</span>;
+  const arrow = rel > 0 ? '▲' : rel < 0 ? '▼' : '■';
+  const cls = v === 'better' ? 'text-positive' : v === 'worse' ? 'text-negative' : 'text-ink-3';
+  const word = v === 'better' ? 'better' : v === 'worse' ? 'worse' : 'no judgement';
+  return (
+    <span className={`inline-flex items-center gap-1 text-2xs font-medium ${cls}`} data-verdict={v} title={`${label}: ${word}`}>
+      <span aria-hidden="true">{arrow}</span>
+      {change(rel)} <span className="font-normal text-ink-3">{label}</span>
+      <span className="sr-only"> ({word})</span>
+    </span>
+  );
+}
+
+/** Best two ads by CPL with enough volume. */
+function defaultSelection(rows: readonly EntityPerformanceRow[]): string[] {
   const enough = rows
     .filter((r) => (r.current.impressions ?? 0) >= DEFAULT_VOLUME_GUARD.minImpressions && (r.current.leads ?? 0) >= DEFAULT_VOLUME_GUARD.minLeads && r.current.cplMinor !== null)
     .sort((a, b) => (a.current.cplMinor ?? 0) - (b.current.cplMinor ?? 0));
   const ids = enough.slice(0, 2).map((r) => r.id);
-  const fatigued = rows.find((r) => r.id === fatiguedId);
-  if (fatigued && !ids.includes(fatigued.id)) ids.push(fatigued.id);
-  for (const r of [...enough, ...rows]) {
-    if (ids.length >= 3) break;
+  for (const r of rows) {
+    if (ids.length >= 2) break;
     if (!ids.includes(r.id)) ids.push(r.id);
   }
-  return ids.slice(0, 3);
+  return ids;
 }
 
 export default function ComparisonPage() {
   const { range, granularity, workspace } = useAppState();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [trend, setTrend] = useState<TrendMetric>('ctr');
+  const searchRef = useRef<HTMLInputElement>(null);
   const ds = getDataset();
 
   // A workspace only compares its own platform's ads; Meta and Google results are never mixed.
@@ -73,15 +86,15 @@ export default function ComparisonPage() {
 
   const requested = (params.get('ads') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   const fromUrl = requested.filter((id, i) => requested.indexOf(id) === i && byId.has(id)).slice(0, MAX_ADS);
-  const selected = fromUrl.length > 0 ? fromUrl : defaultSelection(rows, ds.planted?.fatiguedAdId ?? "");
+  const explicit = params.has('ads');
+  const selected = fromUrl.length > 0 || explicit ? fromUrl : defaultSelection(rows);
   const unknownRequested = requested.filter((id) => !byId.has(id));
 
   const setSelected = (ids: string[]) =>
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        if (ids.length) next.set('ads', ids.join(','));
-        else next.delete('ads');
+        next.set('ads', ids.join(','));
         return next;
       },
       { replace: true },
@@ -92,26 +105,45 @@ export default function ComparisonPage() {
   };
 
   const picked = selected.map((id) => byId.get(id)).filter((r): r is EntityPerformanceRow => !!r);
-  const comparison = useMemo(
+  const colorOf = (i: number) => AD_COLORS[i % AD_COLORS.length] ?? '#2563eb';
+
+  const verdict = useMemo(
     () =>
       picked.length >= MIN_ADS
-        ? compareEntities(
-            picked.map((r) => ({ id: r.id, name: labelOf(r), spendMinor: r.current.spendMinor, impressions: r.current.impressions, clicks: r.current.clicks, leads: r.current.leads })),
+        ? buildVerdict(
+            picked.map((r, i) => ({
+              id: r.id,
+              label: `Ad ${LETTERS[i]} (${r.name})`,
+              spendMinor: r.current.spendMinor,
+              impressions: r.current.impressions,
+              clicks: r.current.clicks,
+              leads: r.current.leads,
+              ctr: r.current.ctr,
+              cplMinor: r.current.cplMinor,
+              cpcMinor: r.current.cpcMinor,
+            })),
           )
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selected.join(','), rows],
   );
 
-  const chartData: ChartRow[] = useMemo(() => {
-    if (!range || selected.length === 0) return [];
-    return adSeries(ds, { adIds: selected, metric: trend, range, granularity }).map((p) => {
-      const row: ChartRow = { key: p.key, label: p.label, incomplete: p.incomplete };
-      for (const id of selected) row[id] = p.values[id] ?? null;
-      return row;
-    });
+  const seriesData = useMemo(() => {
+    const out = new Map<SeriesMetric, ChartRow[]>();
+    if (!range || selected.length === 0) return out;
+    for (const m of TREND_METRICS) {
+      out.set(
+        m,
+        adSeries(ds, { adIds: selected, metric: m, range, granularity }).map((p) => {
+          const row: ChartRow = { key: p.key, label: p.label, incomplete: p.incomplete };
+          for (const id of selected) row[id] = p.values[id] ?? null;
+          return row;
+        }),
+      );
+    }
+    return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ds, range, granularity, trend, selected.join(',')]);
+  }, [ds, range, granularity, selected.join(',')]);
 
   if (!range) {
     return (
@@ -124,25 +156,61 @@ export default function ComparisonPage() {
   }
 
   const q = search.trim().toLowerCase();
-  const candidates = rows.filter((r) => (!q || labelOf(r).toLowerCase().includes(q)));
-  const fmt = METRIC_FORMAT[trend];
-  const series: ChartSeries[] = picked.map((r, i) => ({
-    key: r.id,
-    label: labelOf(r),
-    color: AD_COLORS[i % AD_COLORS.length] ?? '#4f46e5',
-    shape: SHAPES[i % SHAPES.length],
-    format: fmt.value,
-  }));
+  const candidates = rows.filter((r) => !q || labelOf(r).toLowerCase().includes(q));
+  const focusPicker = () => {
+    searchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    searchRef.current?.focus();
+  };
+  const platformName = workspace === 'meta' ? 'Meta Ads' : 'Google Ads';
+  const reference = picked[0];
 
   return (
     <div className="space-y-4">
-      <PageTitle title="Ad comparison" sub={`${workspace === 'meta' ? 'Meta Ads' : 'Google Ads'} ads side by side for ${dateRange(range)}. Pick ${MIN_ADS} to ${MAX_ADS} ads.`} />
+      <PageTitle title="Ad comparison" sub={`${platformName} ads side by side for ${dateRange(range)}. Pick ${MIN_ADS} to ${MAX_ADS} ads.`} />
       <PeriodBar />
       {unknownRequested.length > 0 && <Notice tone="warn">Ignored unknown ad ids in the link: {unknownRequested.join(', ')}.</Notice>}
-      <Notice tone="blue">
-        A "best" marker needs enough volume ({count(DEFAULT_VOLUME_GUARD.minImpressions)} impressions for CTR and CPM, {DEFAULT_VOLUME_GUARD.minClicks} clicks for CPC, {DEFAULT_VOLUME_GUARD.minLeads} leads for CPL).
-        Ads below that are never called best, because small numbers are noisy.
-      </Notice>
+
+      {/* Slots A-D with creative previews */}
+      <section aria-label="Compared ads" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {LETTERS.map((letter, i) => {
+          const r = picked[i];
+          const color = colorOf(i);
+          if (!r) {
+            return (
+              <button
+                key={letter}
+                type="button"
+                onClick={focusPicker}
+                className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed bg-white/60 p-4 text-sm font-medium transition-colors hover:bg-white"
+                style={{ borderColor: color, color }}
+                aria-label={`Choose ad for slot ${letter}`}
+              >
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: color }}>{letter}</span>
+                Choose ad
+              </button>
+            );
+          }
+          const creative = ds.creatives.find((c) => c.id === r.creativeId);
+          return (
+            <article className="card cmp-card flex flex-col gap-3 border-t-4 p-4" style={{ borderTopColor: color }} key={r.id} aria-label={labelOf(r)}>
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: color }}>{letter}</span>
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-sm font-semibold text-ink">{r.name}</h4>
+                  <div className="truncate text-xs text-ink-3">{campaignName.get(r.campaignId)}</div>
+                </div>
+                <button type="button" className="rounded-full px-1.5 text-ink-3 hover:bg-slate-100 hover:text-ink" aria-label={`Remove ${labelOf(r)} from comparison`} onClick={() => toggle(r.id)}>
+                  ×
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <PlatformBadge platform={r.platform} /> <StatusBadge status={r.status} /> {r.fatigued && <Badge tone="neutral">Creative fatigue</Badge>}
+              </div>
+              {creative ? <AdPreview creative={creative} size="sm" /> : <EmptyState title="No creative" />}
+            </article>
+          );
+        })}
+      </section>
 
       <section className="card p-4" aria-label="Choose ads">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -155,20 +223,10 @@ export default function ComparisonPage() {
             </Button>
           )}
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {picked.map((r, i) => (
-            <span key={r.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full border-2 bg-white py-0.5 pl-3 pr-1.5 text-xs font-medium text-ink-2" style={{ borderColor: AD_COLORS[i % AD_COLORS.length] }}>
-              <span className="truncate">{labelOf(r)}</span>
-              <button type="button" className="rounded-full px-1.5 text-ink-3 hover:bg-slate-100 hover:text-ink" aria-label={`Remove ${labelOf(r)} from comparison`} onClick={() => toggle(r.id)}>
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap items-end gap-3">
+        <div className="mt-2 flex flex-wrap items-end gap-3">
           <label className="grid gap-1 text-xs font-semibold text-ink-2">
             <span>Search ads</span>
-            <input className={`${inputCls} w-56 max-w-full`} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ad name" />
+            <input ref={searchRef} className={`${inputCls} w-56 max-w-full`} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ad name" />
           </label>
         </div>
         <ul className="mt-3 grid max-h-64 gap-0.5 overflow-y-auto rounded-lg border border-line p-1 sm:grid-cols-2">
@@ -193,79 +251,171 @@ export default function ComparisonPage() {
         {candidates.length > 60 && <p className="mt-2 text-xs text-ink-3">Showing the first 60 matches. Use search to narrow.</p>}
       </section>
 
-      {picked.length < MIN_ADS || !comparison ? (
+      {picked.length < MIN_ADS || !verdict || !reference ? (
         <EmptyState title="Select at least two ads to compare" />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {picked.map((r, i) => {
-              const creative = ds.creatives.find((c) => c.id === r.creativeId);
-              const m = comparison.table[r.id];
+          {/* Period and KPI comparison */}
+          <section className="card overflow-hidden" aria-label="KPI comparison">
+            <div className="border-b border-line px-4 py-3 sm:px-5">
+              <h3 className="text-sm font-semibold text-ink">KPI comparison</h3>
+              <p className="text-xs text-ink-3">
+                Each value shows the change against the previous period of equal length, and (for B to D) against Ad A. Green is better, red is worse; for costs a lower value is better. Spend and impressions are not judged.
+                A "best" marker needs enough volume ({count(DEFAULT_VOLUME_GUARD.minImpressions)} impressions, {DEFAULT_VOLUME_GUARD.minClicks} clicks, {DEFAULT_VOLUME_GUARD.minLeads} leads).
+              </p>
+            </div>
+            <div className="relative overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-[13px]">
+                <thead>
+                  <tr className="text-left text-xs text-ink-3">
+                    <th scope="col" className="px-4 py-2 font-medium sm:px-5">Metric</th>
+                    {picked.map((r, i) => (
+                      <th scope="col" key={r.id} className="px-3 py-2 font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: colorOf(i) }} aria-hidden="true" />
+                          Ad {LETTERS[i]}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ROWS.map((def) => {
+                    const values = picked.map((r) => ({ id: r.id, value: def.get(r.current) }));
+                    // Costs and rates are only called best with enough volume behind them.
+                    const guardOk = (r: EntityPerformanceRow) => {
+                      const m = r.current;
+                      if (def.key === 'ctr' || def.key === 'cpm') return (m.impressions ?? 0) >= DEFAULT_VOLUME_GUARD.minImpressions;
+                      if (def.key === 'cpc') return (m.clicks ?? 0) >= DEFAULT_VOLUME_GUARD.minClicks;
+                      if (def.key === 'cpl') return (m.leads ?? 0) >= DEFAULT_VOLUME_GUARD.minLeads;
+                      return true;
+                    };
+                    const winner = bestId(def.key, picked.filter(guardOk).map((r) => ({ id: r.id, value: def.get(r.current) })));
+                    void values;
+                    return (
+                      <tr key={def.key} className="border-t border-line align-top">
+                        <th scope="row" className="px-4 py-2.5 text-left font-medium text-ink-2 sm:px-5">{def.label}</th>
+                        {picked.map((r, i) => {
+                          const cur = def.get(r.current);
+                          const prev = def.get(r.previous);
+                          const ref = def.get(reference.current);
+                          return (
+                            <td key={r.id} className="px-3 py-2.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="tabular font-semibold text-ink">{cur === null ? '–' : def.fmt(cur)}</span>
+                                {winner === r.id && <Badge tone="good" title="Best of the selected ads with enough volume">Best</Badge>}
+                              </div>
+                              <div className="mt-0.5 grid gap-0.5">
+                                <DeltaChip metric={def.key} value={cur} reference={prev} label="vs previous period" />
+                                {i > 0 && <DeltaChip metric={def.key} value={cur} reference={ref} label="vs Ad A" />}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="border-t border-line px-4 py-2.5 text-xs text-ink-3 sm:px-5">
+              Verified orders and revenue count only paid orders with hard evidence (campaign-level for ads). A dash means there is no data, not zero.
+            </p>
+          </section>
+
+          {/* Verdict */}
+          <section className="card p-4 sm:p-5" aria-label="Verdict">
+            <h3 className="text-sm font-semibold text-ink">Verdict</h3>
+            <p className="mt-1 text-[15px] font-semibold text-ink" data-testid="verdict-headline">{verdict.headline}</p>
+            {verdict.reasons.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-ink-2">
+                {verdict.reasons.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            )}
+            {verdict.caveats.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-ink-3">
+                {verdict.caveats.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-2xs text-ink-3">Computed from the synthetic dataset by fixed rules. This is a summary of the numbers, not advice to change anything.</p>
+          </section>
+
+          {/* Trend charts: one card per metric, one line per ad */}
+          <div className="grid gap-4 xl:grid-cols-2">
+            {TREND_METRICS.map((m) => {
+              const fmt = METRIC_FORMAT[m];
+              const series: ChartSeries[] = picked.map((r, i) => ({
+                key: r.id,
+                label: `Ad ${LETTERS[i]} · ${r.name}`,
+                color: colorOf(i),
+                shape: SHAPES[i % SHAPES.length],
+                format: fmt.value,
+              }));
               return (
-                <article className="card cmp-card flex flex-col gap-3 p-4" key={r.id} aria-label={labelOf(r)}>
-                  <div className="min-w-0">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-ink">
-                      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: AD_COLORS[i % AD_COLORS.length] }} aria-hidden="true" />
-                      <span className="truncate">{r.name}</span>
-                    </h4>
-                    <div className="truncate text-xs text-ink-3">{campaignName.get(r.campaignId)}</div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <PlatformBadge platform={r.platform} /> <StatusBadge status={r.status} /> {r.fatigued && <Badge tone="warn">Creative fatigue</Badge>}
-                    </div>
-                  </div>
-                  {creative ? <AdPreview creative={creative} size="sm" /> : <EmptyState title="No creative" />}
-                  <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 text-sm">
-                    <MetricRow label="Spend" text={money(r.current.spendMinor)} />
-                    <MetricRow label="Impressions" text={count(r.current.impressions)} />
-                    <MetricRow label="Clicks" text={count(r.current.clicks)} />
-                    <MetricRow label="Leads" text={count(r.current.leads)} />
-                    {TABLE_METRICS.map((t) => {
-                      const v = m?.[t.key] ?? null;
-                      const best = comparison.best[t.key];
-                      const isBest = (best.status === 'winner' && best.entityId === r.id) || (best.status === 'tie' && best.entityIds.includes(r.id));
-                      return (
-                        <MetricRow
-                          key={t.key}
-                          label={t.label}
-                          text={v === null ? '–' : t.fmt(v)}
-                          best={isBest ? <Badge tone="good" title="Best of the selected ads with enough volume">Best{best.status === 'tie' ? ' (tie)' : ''}</Badge> : null}
-                        />
-                      );
-                    })}
-                  </dl>
-                </article>
+                <ChartCard
+                  key={m}
+                  title={`${fmt.label} trend`}
+                  render={(o) => <TimeSeriesChart data={seriesData.get(m) ?? []} series={series} yFormat={fmt.axis} height={o.height} fixedWidth={o.fixedWidth} ariaLabel={`${fmt.label} of selected ads`} />}
+                />
               );
             })}
           </div>
-          <ul className="grid gap-1 pl-1 text-xs text-ink-3">
-            {TABLE_METRICS.map((t) => {
-              const b = comparison.best[t.key];
-              if (b.status !== 'insufficient_data') return null;
-              return <li key={t.key}>{t.label}: no best ad. {b.reason}.</li>;
-            })}
-          </ul>
 
-          <ChartCard
-            title={`${fmt.label} trend`}
-            subtitle={<Segmented<TrendMetric> label="Trend metric" size="sm" value={trend} options={TREND} onChange={setTrend} />}
-            render={(r) => (
-              <TimeSeriesChart data={chartData} series={series} yFormat={fmt.axis} height={r.height} fixedWidth={r.fixedWidth} ariaLabel={`${fmt.label} of selected ads`} />
-            )}
-          />
+          {/* Detailed table */}
+          <section className="card overflow-hidden" aria-label="Detailed table">
+            <div className="border-b border-line px-4 py-3 sm:px-5">
+              <h3 className="text-sm font-semibold text-ink">Details</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] border-collapse text-[13px]">
+                <thead>
+                  <tr className="text-left text-xs text-ink-3">
+                    <th scope="col" className="px-4 py-2 font-medium sm:px-5">Ad</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Campaign</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Spend</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Impr.</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Clicks</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">CTR</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">CPC</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Leads</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">CPL</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Previous CPL</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Verified revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {picked.map((r, i) => (
+                    <tr key={r.id} className="border-t border-line">
+                      <th scope="row" className="px-4 py-2 text-left font-medium text-ink sm:px-5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: colorOf(i) }} aria-hidden="true" />
+                          {LETTERS[i]} · {r.name}
+                        </span>
+                      </th>
+                      <td className="px-3 py-2 text-ink-3">{campaignName.get(r.campaignId)}</td>
+                      <td className="px-3 py-2"><StatusBadge status={r.status} /></td>
+                      <td className="tabular px-3 py-2 text-right">{money(r.current.spendMinor)}</td>
+                      <td className="tabular px-3 py-2 text-right">{count(r.current.impressions)}</td>
+                      <td className="tabular px-3 py-2 text-right">{count(r.current.clicks)}</td>
+                      <td className="tabular px-3 py-2 text-right">{pct(r.current.ctr)}</td>
+                      <td className="tabular px-3 py-2 text-right">{money(r.current.cpcMinor)}</td>
+                      <td className="tabular px-3 py-2 text-right">{count(r.current.leads)}</td>
+                      <td className="tabular px-3 py-2 text-right">{money(r.current.cplMinor)}</td>
+                      <td className="tabular px-3 py-2 text-right text-ink-3">{money(r.previous.cplMinor)}</td>
+                      <td className="tabular px-3 py-2 text-right">{r.current.verifiedOrders > 0 ? money(r.current.verifiedRevenueMinor) : '–'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       )}
     </div>
-  );
-}
-
-function MetricRow(props: { label: string; text: string; best?: React.ReactNode }) {
-  return (
-    <>
-      <dt className="text-xs text-ink-3">{props.label}</dt>
-      <dd className={`m-0 text-right font-semibold tabular ${props.best ? 'text-positive' : 'text-ink'}`}>
-        <Value text={props.text} />
-        {props.best && <> {props.best}</>}
-      </dd>
-    </>
   );
 }

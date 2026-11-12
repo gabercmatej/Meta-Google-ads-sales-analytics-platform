@@ -57,6 +57,12 @@ export function PeriodBar({ children, right }: { children?: ReactNode; right?: R
         )}
         {right && <div className="ml-auto flex items-center gap-2">{right}</div>}
       </div>
+      {period.preset === 'today' && (
+        <p className="mt-2 flex items-center gap-1.5 border-t border-line pt-2 text-xs text-ink-3" data-testid="today-note">
+          <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400" />
+          Today so far — figures update during the day
+        </p>
+      )}
       {children && <div className={`${open ? 'grid' : 'hidden'} mt-2 grid-cols-2 gap-2 border-t border-line pt-2.5 lg:flex lg:flex-wrap lg:items-center`}>{children}</div>}
     </div>
   );

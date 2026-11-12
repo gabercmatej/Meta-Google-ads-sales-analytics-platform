@@ -41,7 +41,7 @@ export interface ActivityEntry {
   entityId: string | null;
   entityName: string | null;
   detail: string;
-  outcome: 'applied_in_simulation' | 'validated_not_applied' | 'rejected' | 'draft_saved' | 'reset';
+  outcome: 'applied_in_simulation' | 'validated_not_applied' | 'rejected' | 'draft_saved' | 'reset' | 'refreshed' | 'synthetic_history';
 }
 
 export interface EntityRef {

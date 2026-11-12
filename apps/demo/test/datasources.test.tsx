@@ -32,12 +32,12 @@ describe('DataSourcesPage', () => {
     cards.forEach((c) => expect(c.textContent).toContain('Simulated'));
   });
 
-  it('lists the planted gap days with their reason', () => {
+  it('reports no gap days in the default dataset', () => {
     mount();
     const text = document.body.textContent ?? '';
-    expect(text).toContain('Missing');
-    expect(text).toContain('Source error');
-    expect(text).toContain('Partial');
+    expect(text).toContain('No gaps');
+    expect(text).not.toContain('Source error');
+    expect(text).not.toContain('Has gap days');
   });
 
   it('shows integrity checks with PASS and PARTIAL badges and no FAIL', () => {
@@ -62,7 +62,8 @@ describe('DataSourcesPage', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(document.body.textContent).toContain('Demo simulation – no external API was called');
+      expect(document.body.textContent).toContain('Simulated in this browser — no network request');
+      expect(screen.getAllByTestId('last-refresh-relative')[0]!.textContent).toBe('just now');
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();

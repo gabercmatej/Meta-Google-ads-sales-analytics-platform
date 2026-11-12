@@ -3,15 +3,16 @@
 // Seeded generator for the interactive demo's FICTIONAL company ("Northwind Advisory").
 // Deterministic: the same seed always yields a deep-equal dataset. Only mulberry32 is used (no
 // unseeded randomness, no clock reads). Money is integer EUR cents. Dates are calendar days in
-// Europe/Ljubljana; instants are UTC. History: 2025-10-01 .. 2026-11-11 (reference date).
+// Europe/Ljubljana; instants are UTC. History: 2024-11-01 .. 2026-11-11 (reference date).
 //
 // PLANTED CASES (exact ids/dates are also exported in `dataset.planted` and asserted in tests):
 //  1. Underperforming campaign `meta-c3` ("Lookalike Test | Broad"): its lead rate decays over the
-//     last 60 days, so cost per lead rises in the last 30 days vs the previous 30 (~ +35%).
+//     last 60 days, so cost per lead rises in the last 30 days vs the previous 30 (clearly the steepest rise, ~ +40%).
 //  2. Fatigued Meta ad `meta-c1-g1-a1`: CTR declines over the 35 days before the reference date
 //     (~ -23% last 30 days vs previous 30). `fatigued` flag rule: see entityPerformance.
-//  3. Google gap: 2026-10-03 has SourceDay 'missing' and NO Google rows.
-//  4. Meta gap: 2026-10-19 has SourceDay 'source_error' and NO Meta rows.
+//  2b. Mildly declining Google ad `google-c1-g1-a1` (CTR about -14%, not fatigued): falling-CTR case.
+//  3. (opt-in `plantedGaps`) Google gap: 2026-10-03 has SourceDay 'missing' and NO Google rows.
+//  4. (opt-in `plantedGaps`) Meta gap: 2026-10-19 has SourceDay 'source_error' and NO Meta rows.
 //  5. Partial final day 2026-11-11 (reference date): 'partial' for meta, google, crm, payments and
 //     leads. Rows exist (about 45% volume) but are flagged; completed-days presets exclude it.
 //  6. Label-only order: customer label "Google", no verified evidence -> source_only, flagged
@@ -39,11 +40,19 @@ import {
 
 export interface ShowcaseOptions {
   seed?: number;
+  /**
+   * Opt in to the planted source gaps (Google 'missing' on 2026-10-03, Meta 'source_error' on
+   * 2026-10-19, rows removed). Default false: every completed day has full rows for every source.
+   */
+  plantedGaps?: boolean;
 }
 
 export const SHOWCASE_GOOGLE_MISSING_DATE: ISODate = '2026-10-03';
 export const SHOWCASE_META_ERROR_DATE: ISODate = '2026-10-19';
 export const SHOWCASE_VAT_RATE_PERCENT = 22;
+
+/** A second, milder CTR decline (below the fatigue rule) so the falling-CTR recommendation has a real case. */
+const MILD_DECLINE_AD_ID = 'google-c1-g1-a1';
 
 const SEASON = [1.2, 1.05, 1.0, 0.95, 0.95, 0.9, 0.85, 0.85, 1.2, 1.05, 1.0, 0.75];
 const WEEKDAY = [0.7, 1.1, 1.1, 1.05, 1.05, 0.95, 0.75];
@@ -93,9 +102,13 @@ export function generateShowcaseDataset(options: ShowcaseOptions = {}): Showcase
           ctrNow *= 1 - 0.42 * t;
           cpcNow *= 1 + 0.12 * t;
         }
+        if (ad.id === MILD_DECLINE_AD_ID) {
+          const t = clip01((dn - (refNum - 35)) / 35);
+          ctrNow *= 1 - 0.27 * t;
+        }
         if (spec.rampDownLeads) {
           const t = clip01((dn - (refNum - 60)) / 60);
-          leadRate *= 1 - 0.45 * t;
+          leadRate *= 1 - 0.7 * t;
         }
         // cpm (cents per 1000 impressions) = cpc * ctr * 1000, so clicks ~ spend / cpc.
         const cpm = cpcNow * ctrNow * 1000;
@@ -123,9 +136,13 @@ export function generateShowcaseDataset(options: ShowcaseOptions = {}): Showcase
   }
 
   // ---- source gaps ---------------------------------------------------------------------
-  const sourceDays: SourceDay[] = [
+  const gaps = options.plantedGaps === true;
+  const gapDays: SourceDay[] = !gaps ? [] : [
     { source: 'google', date: SHOWCASE_GOOGLE_MISSING_DATE, status: 'missing', note: 'Simulated outage: the Google Ads export for this day is missing. No rows were imported.' },
     { source: 'meta', date: SHOWCASE_META_ERROR_DATE, status: 'source_error', note: 'Simulated API error: the Meta Ads request for this day failed. No rows were imported.' },
+  ];
+  const sourceDays: SourceDay[] = [
+    ...gapDays,
     ...(['meta', 'google', 'crm', 'payments', 'leads'] as const).map((source): SourceDay => ({
       source,
       date: ref,
@@ -133,7 +150,7 @@ export function generateShowcaseDataset(options: ShowcaseOptions = {}): Showcase
       note: 'Today is still accumulating. Present but flagged; completed-day presets exclude it.',
     })),
   ];
-  const daily = trueRows.filter(
+  const daily = !gaps ? trueRows : trueRows.filter(
     (r) => !(r.platform === 'google' && r.date === SHOWCASE_GOOGLE_MISSING_DATE) && !(r.platform === 'meta' && r.date === SHOWCASE_META_ERROR_DATE),
   );
 
@@ -174,8 +191,8 @@ export function generateShowcaseDataset(options: ShowcaseOptions = {}): Showcase
     planted: {
       underperformingCampaignId: 'meta-c3',
       fatiguedAdId: FATIGUED_AD_ID,
-      googleMissingDate: SHOWCASE_GOOGLE_MISSING_DATE,
-      metaSourceErrorDate: SHOWCASE_META_ERROR_DATE,
+      googleMissingDate: gaps ? SHOWCASE_GOOGLE_MISSING_DATE : null,
+      metaSourceErrorDate: gaps ? SHOWCASE_META_ERROR_DATE : null,
       partialDate: ref,
       ...crm.planted,
     },

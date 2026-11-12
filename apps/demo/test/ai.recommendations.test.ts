@@ -58,7 +58,7 @@ describe('recommendations', () => {
   });
 
   it('returns no change-based rules when the previous period predates the history', () => {
-    const first = resolveShowcaseRange(ds, 'custom', { start: '2025-10-01', end: '2025-10-30' })!;
+    const first = resolveShowcaseRange(ds, 'custom', { start: '2024-11-01', end: '2024-11-30' })!;
     const early = buildRecommendations(ds, 'combined', first);
     expect(early.previous).toBeNull();
     expect(early.items.some((i) => i.type === 'rising_cpl' || i.type === 'falling_ctr')).toBe(false);

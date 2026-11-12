@@ -15,10 +15,11 @@ function expect(ok, what) {
 }
 
 export async function runFlows({ page, base, step, shots, newPage }) {
-  const shot = async (name, p = page) => {
+  // Desktop only (1440x900, scale 1). `full` captures the whole document instead of the viewport.
+  const shot = async (name, full = false) => {
     if (!shots) return;
-    await p.waitForTimeout(400); // let chart animations settle (reduced motion is on, but layout may still shift)
-    await p.screenshot({ path: join(shots, `${name}.png`) });
+    await page.waitForTimeout(400); // let chart animations settle (reduced motion is on, but layout may still shift)
+    await page.screenshot({ path: join(shots, `${name}.png`), fullPage: full });
   };
   const go = async (path) => {
     await page.goto(base + path, { waitUntil: 'networkidle' });
@@ -39,10 +40,11 @@ export async function runFlows({ page, base, step, shots, newPage }) {
 
   await step('combined: overview renders and the platform switch drives the URL', async () => {
     await go('/combined');
-    await shot('combined');
+    await shot('combined-hero');
+    await shot('combined-full', true);
     await channel('google').click();
     await page.waitForURL(/\/overview\?.*platform=google/);
-    await shot('overview-google');
+    await shot('google-overview');
     await page.getByRole('group', { name: 'Period' }).getByRole('button', { name: '90 days' }).click();
     await page.waitForURL(/period=last90/);
     await page.getByRole('group', { name: 'Show chart by day or month' }).first().getByRole('button', { name: 'Monthly' }).click();
@@ -56,7 +58,7 @@ export async function runFlows({ page, base, step, shots, newPage }) {
 
   await step('overview: custom period with explicit dates', async () => {
     await go('/overview?platform=meta&period=last30');
-    await shot('overview');
+    await shot('meta-overview');
     await page.getByRole('group', { name: 'Period' }).getByRole('button', { name: 'Custom' }).click();
     await page.getByLabel('From date').fill('2026-06-01');
     await page.getByLabel('To date').fill('2026-08-31');
@@ -128,6 +130,28 @@ export async function runFlows({ page, base, step, shots, newPage }) {
     await expectVisible(page.locator('h1'), 'campaign heading');
   });
 
+  await step('recommendations: detail page shows evidence and charts', async () => {
+    await go('/recommendations');
+    await page.locator('[data-testid="rec-detail-link"]').first().click();
+    await page.waitForURL(/recommendations[/].+/);
+    await expectVisible(page.locator('[data-testid="rec-evidence"]'), 'evidence card');
+    const charts = page.locator('[data-testid="rec-charts"]');
+    await expectVisible(charts, 'chart grid');
+    await expectVisible(charts.locator('svg.recharts-surface'), 'a rendered chart');
+    await shot('recommendation-detail', true);
+    expect((await charts.locator('.recharts-wrapper').count()) >= 2, 'fewer than 2 charts on the detail page');
+  });
+
+  await step('data sources: Refresh now updates the last-refresh timestamp', async () => {
+    await go('/data-sources');
+    const card = page.locator('[data-testid="source-card"]').first();
+    await expectVisible(card, 'source card');
+    const before = await card.locator('[data-testid="last-refresh-abs"]').textContent();
+    await card.getByRole('button', { name: /Refresh .* now/ }).click();
+    await page.waitForFunction((b) => document.querySelector('[data-testid="source-card"] [data-testid="last-refresh-abs"]')?.textContent !== b, before, { timeout: 8000 });
+    expect(true, '');
+  });
+
   await step('recommendations: ask assistant link carries the question', async () => {
     await go('/recommendations');
     await page.locator('main article').getByRole('link', { name: 'Ask assistant' }).first().click();
@@ -142,7 +166,7 @@ export async function runFlows({ page, base, step, shots, newPage }) {
     if (shots) {
       await page.locator('.cmp-card').first().evaluate((el) => el.scrollIntoView({ block: 'start' }));
       await page.evaluate(() => window.scrollBy(0, -140));
-      await shot('comparison');
+      await shot('compare');
       await page.evaluate(() => window.scrollTo(0, 0));
     }
     const picker = page.getByRole('region', { name: 'Choose ads' });
@@ -158,44 +182,111 @@ export async function runFlows({ page, base, step, shots, newPage }) {
   await step('screenshots: campaigns before any simulated change', async () => {
     if (!shots) return;
     await go('/campaigns?platform=meta');
-    await shot('campaigns');
-    await go('/campaigns/meta-c1?platform=meta');
-    await shot('campaign-detail');
+    await shot('campaigns-meta');
   });
+
+  const cont = () => page.getByRole('button', { name: /^Create draft and continue/ }).click();
 
   await step('create: draft is saved and listed on Drafts', async () => {
     await go('/create?platform=meta');
-    await next();
     await page.getByLabel('Campaign name').fill('Autumn consultation test');
-    await page.getByLabel('Daily budget (EUR)').fill('25');
-    await page.getByRole('button', { name: 'Save as draft' }).click();
+    await cont();
     await expectVisible(page.getByText(/Draft saved in this browser/), 'draft saved note');
     await go('/drafts?platform=meta');
     await expectVisible(page.getByText('Autumn consultation test'), 'draft on the Drafts page');
+    await shot('drafts');
     await page.getByRole('button', { name: 'Validate' }).first().click();
     await expectVisible(page.locator('main article').first().locator('[role=status], [role=alert]'), 'validation result');
   });
 
   await step('create: Meta campaign with ad is created PAUSED and listed in Campaigns', async () => {
     await go('/create?platform=meta');
-    await next();
+    await expectVisible(page.getByText('Step 1 of 6'), 'step eyebrow');
     await page.getByLabel('Campaign name').fill('Winter documents demo');
-    await page.getByLabel('Daily budget (EUR)').fill('30');
-    await next();
-    await next();
+    await cont();
+    await expectVisible(page.getByText('Step 2 of 6'), 'audience step');
+    await cont();
     await page.getByLabel('Ad name').fill('Winter documents ad');
     await page.getByLabel('Headline', { exact: true }).fill('Documents reviewed in two days');
     await page.getByLabel('Primary text', { exact: true }).fill('A fictional ad used only in this demo.');
     const url = page.getByLabel('Final URL');
     await url.fill((await url.inputValue()) + 'documents');
-    await shot('create');
-    await next();
-    await next();
+    await shot('create-meta');
+    await cont();
+    await cont();
+    await page.getByLabel('Daily budget (EUR)').fill('30');
+    await cont();
+    await expectVisible(page.getByText('Step 6 of 6'), 'review step');
     await page.getByRole('button', { name: 'Create (PAUSED)' }).click();
     await expectVisible(page.getByText('Created in simulation (PAUSED)'), 'created confirmation');
     await go('/campaigns?platform=meta');
     await expectVisible(page.getByText('Winter documents demo'), 'created campaign row');
     await expectVisible(page.getByText('Created in demo').first(), 'created badge');
+  });
+
+  await step('create: Google wizard reaches Review, validates only and saves a draft', async () => {
+    await go('/create?platform=google');
+    await expectVisible(page.getByText('Step 1 of 7'), 'google step eyebrow');
+    await next();
+    await page.getByRole('radio', { name: /Search/ }).first().check();
+    await next();
+    await page.getByLabel('Campaign name').fill('Google search demo');
+    await page.getByLabel('Daily budget (EUR)').fill('20');
+    await next();
+    await page.getByLabel('Ad group name').fill('Core terms');
+    await page.getByLabel('Keywords').fill('legal advice online, sample contract review'.replace(', ', '\n'));
+    await next();
+    await page.getByLabel('Ad name').fill('Search ad 1');
+    await page.getByLabel('Headline 1').fill('Fast online advice');
+    await page.getByLabel('Headline 2').fill('Fixed price review');
+    await page.getByLabel('Headline 3').fill('Book in two minutes');
+    await page.getByLabel('Description 1').fill('A fictional demo ad for a fictional company.');
+    await page.getByLabel('Description 2').fill('Nothing here is sent to Google.');
+    const url = page.getByLabel('Final URL');
+    await url.fill((await url.inputValue()) + 'search');
+    await shot('create-google');
+    await next();
+    await next();
+    await expectVisible(page.getByText('Step 7 of 7'), 'google review step');
+    await expectVisible(page.getByText('No validation issues.'), 'review without issues');
+    await page.getByRole('button', { name: 'Save draft' }).click();
+    await expectVisible(page.getByText(/Draft saved in this browser/), 'google draft saved');
+    await page.getByRole('button', { name: 'Validate (no real change)' }).click();
+    await expectVisible(page.getByText('Validated only').first(), 'validated-only result');
+    await go('/drafts?platform=google');
+    await expectVisible(page.getByText('Google search demo'), 'google draft listed');
+  });
+
+  await step('campaigns: Meta drill-down campaign to ad set to ad detail', async () => {
+    await go('/campaigns?platform=meta');
+    await page.locator('[data-testid="ads-navigator"] a[href*="level=adsets&campaign="]').first().click();
+    await expectVisible(page.getByRole('tab', { name: /Ad sets/ }).or(page.getByRole('link', { name: /Ad sets/ })), 'ad sets level');
+    await page.locator('[data-testid="ads-navigator"] a[href*="level=ads&"][href*="adset="]').first().click();
+    await page.locator('[data-testid="ads-navigator"] a[href^="/ads/"]').first().click();
+    await page.locator('h1').first().waitFor({ timeout: 8000 });
+    await expectVisible(page.getByText('Ad settings'), 'ad detail settings card');
+    await shot('campaign-drilldown');
+  });
+
+  await step('campaigns: Google Performance Max shows asset groups, not ad groups', async () => {
+    await go('/campaigns?platform=google&level=adsets&campaign=google-c4');
+    await expectVisible(page.getByText(/Asset group |/).first(), 'asset group rows');
+    await shot('campaigns-google-assetgroups');
+    expect((await page.getByRole('link', { name: /^Ad groups/ }).count()) === 0, 'PMax drill must not offer Ad groups');
+  });
+
+  await step('campaigns: column chooser hides and restores a column', async () => {
+    await go('/campaigns?platform=meta');
+    const header = page.locator('[data-testid="ads-navigator"] th', { hasText: /^CTR/ });
+    await expectVisible(header, 'CTR column');
+    await page.getByRole('button', { name: /^Columns/ }).click();
+    await page.getByRole('checkbox', { name: /CTR/ }).uncheck();
+    await header.first().waitFor({ state: 'detached', timeout: 4000 }).catch(() => {
+      throw new Error('CTR column still visible after hiding it');
+    });
+    await page.getByRole('checkbox', { name: /CTR/ }).check();
+    await expectVisible(header, 'CTR column restored');
+    await page.keyboard.press('Escape');
   });
 
   await step('campaigns: pause a Meta campaign through the confirm flow, then it is logged', async () => {
@@ -243,7 +334,12 @@ export async function runFlows({ page, base, step, shots, newPage }) {
     await setRole('Viewer');
     expect(await page.getByRole('button', { name: /^(Pause|Resume) / }).first().isDisabled(), 'pause enabled for a viewer');
     await setRole('Administrator');
-    await go('/users');
+    // The role lives in memory, so navigate inside the app instead of reloading (a reload resets it to Ad editor).
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/users');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await expectVisible(page.getByText('Users (').first(), 'user list for an administrator');
     await shot('users');
     await setRole('Ad editor');
   });
@@ -258,11 +354,30 @@ export async function runFlows({ page, base, step, shots, newPage }) {
     expect((await page.getByText('Winter documents demo').count()) === 0, 'created campaign survived the reset');
   });
 
+  await step('sales: the date basis toggle switches the basis and the shown line', async () => {
+    await go('/sales?platform=meta&period=last30');
+    const shown = page.locator('[data-testid="basis-shown"]');
+    await expectVisible(shown, 'basis line');
+    expect(/order date/i.test(await shown.innerText()), 'default basis is not the order date');
+    await page.getByRole('button', { name: 'By payment date' }).click();
+    await page.waitForFunction(() => /payment date/i.test(document.querySelector('[data-testid="basis-shown"]')?.textContent ?? ''), null, { timeout: 4000 });
+    await page.getByRole('button', { name: 'By order date (as in CRM)' }).click();
+    await page.waitForFunction(() => /order date/i.test(document.querySelector('[data-testid="basis-shown"]')?.textContent ?? ''), null, { timeout: 4000 });
+  });
+
+  await step('leads: a chart opens in the expand dialog', async () => {
+    await go('/leads?platform=meta&period=last30');
+    await page.getByRole('button', { name: /^Expand chart: / }).first().click();
+    await expectVisible(page.getByRole('dialog'), 'expanded leads chart dialog');
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 4000 });
+  });
+
   await step('screenshots: analytics pages', async () => {
     if (!shots) return;
-    for (const [path, name] of [['/sales?platform=meta', 'sales'], ['/leads?platform=meta', 'leads'], ['/attribution', 'attribution'], ['/data-sources', 'data-sources'], ['/activity', 'activity'], ['/drafts?platform=meta', 'drafts']]) {
+    for (const [path, name] of [['/sales?platform=meta', 'sales'], ['/leads?platform=meta', 'leads'], ['/attribution', 'attribution'], ['/data-sources', 'data-sources'], ['/activity', 'activity']]) {
       await go(path);
-      await shot(name);
+      await shot(name, name === 'data-sources');
     }
   });
 
@@ -271,11 +386,9 @@ export async function runFlows({ page, base, step, shots, newPage }) {
     try {
       await phone.goto(base + '/combined', { waitUntil: 'networkidle' });
       await phone.locator('h1').first().waitFor({ timeout: 8000 });
-      await shot('mobile-overview', phone);
       await phone.getByRole('button', { name: 'Open menu' }).click();
       const drawer = phone.getByRole('dialog', { name: 'Main menu' });
       await expectVisible(drawer, 'navigation drawer');
-      await shot('mobile-nav', phone);
       await drawer.getByRole('link', { name: /assistant/i }).click();
       await phone.waitForURL(/\/assistant/);
       await expectVisible(phone.locator('h1', { hasText: /assistant/i }), 'assistant heading on phone');

@@ -1,15 +1,20 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Dialog } from '../ui';
 import { useAppState, PLATFORM_LABELS } from '../../state/AppState';
 import { dateRange } from '../../lib/format';
+import { saveChartPdf } from '../../lib/chartPdf';
 import type { Granularity } from '@sedem-ads/analytics-core';
+import { ChartHostProvider, ChartRoleScope, useChartHost, type ChartModel, type ChartOptions } from './ChartHost';
+import { ChartDialog } from './ChartDialog';
+import { DEFAULT_HOW_CALCULATED, ValuesTable, valueRows } from './ChartValues';
 
 export interface ChartRenderOptions {
   expanded: boolean;
   print: boolean;
   height: number;
   fixedWidth?: number;
+  /** Selected metric when the card offers several (see `metrics`). */
+  metric?: string;
 }
 
 export interface ChartCardProps {
@@ -25,6 +30,12 @@ export interface ChartCardProps {
   /** Footnote under the chart (partial/missing-day notes, definitions). */
   note?: ReactNode;
   className?: string;
+  /** Metrics offered in the expanded view; the first one is the card's own metric. */
+  metrics?: readonly { value: string; label: string }[];
+  /** Plain-text explanation shown under "How it is calculated". */
+  howCalculated?: string;
+  /** Scope line after the period; defaults to the selected platform. */
+  scope?: string;
 }
 
 const GRANULARITY: readonly { value: Granularity; label: string }[] = [
@@ -57,13 +68,24 @@ function GranularityToggle({ className = '' }: { className?: string }) {
   );
 }
 
-/** Chart card as in the product: title + period total, period line, Daily/Monthly, zoom and print icons. */
+/** Chart card as in the product: title + period total, period line, Daily/Monthly, expand and print icons. */
 export function ChartCard(props: ChartCardProps) {
   const { granularity, range, platform } = useAppState();
   const [expanded, setExpanded] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const [options, setOptions] = useState<ChartOptions>({ grid: true, bars: false });
+  const [showTable, setShowTable] = useState(true);
+  const [metric, setMetric] = useState<string | undefined>(props.metrics?.[0]?.value);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setExpanded(false), []);
   const period = dateRange(range);
+  const scope = props.scope ?? PLATFORM_LABELS[platform];
+  const granLabel = granularity === 'daily' ? 'Daily' : 'Monthly';
+  const defaultMetric = props.metrics?.[0]?.value;
+  const metricChanged = metric !== undefined && metric !== defaultMetric;
 
   useEffect(() => {
     if (!printing) return;
@@ -80,7 +102,7 @@ export function ChartCard(props: ChartCardProps) {
         // Some browsers return from print() before afterprint fires; either path cleans up once.
         window.setTimeout(done, 0);
       }
-    }, 60);
+    }, 120);
     return () => {
       window.clearTimeout(t);
       window.removeEventListener('afterprint', done);
@@ -96,76 +118,129 @@ export function ChartCard(props: ChartCardProps) {
       </span>
     ) : null;
   const note = props.note ? <div className="mt-3 text-xs leading-snug text-ink-3">{props.note}</div> : null;
+  const periodText = (
+    <>
+      {period} · {scope}
+      {props.subtitle ? <> · {props.subtitle}</> : null}
+    </>
+  );
+  const how = props.howCalculated ? `${props.howCalculated} ${DEFAULT_HOW_CALCULATED}` : DEFAULT_HOW_CALCULATED;
+  const periodHead = granularity === 'daily' ? 'Day' : 'Month';
+
+  const savePdf = async (models: Partial<Record<string, ChartModel>>) => {
+    const model = models.dialog ?? models.card;
+    if (!model || !range) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const { head, rows, colors } = valueRows(model, hidden);
+      const metricLabel = metricChanged ? props.metrics?.find((m) => m.value === metric)?.label : undefined;
+      const fileName = await saveChartPdf({
+        title: metricLabel ? `${props.title} - ${metricLabel}` : props.title,
+        from: range.start,
+        to: range.end,
+        periodText: period,
+        scope,
+        granularity: granLabel,
+        headline: !metricChanged && props.total !== undefined && typeof props.total !== 'object' ? `${props.totalLabel ?? 'Period total'}: ${String(props.total)}` : undefined,
+        howCalculated: how,
+        series: head.map((label, i) => ({ label, color: colors[i]! })),
+        rows,
+        svg: bodyRef.current?.querySelector<SVGSVGElement>('[data-chart-plot] svg.recharts-surface') ?? null,
+      });
+      setStatus(`Saved ${fileName}`);
+    } catch {
+      setStatus('Could not create the PDF in this browser.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <figure className={`card chart-card m-0 flex min-w-0 flex-col ${props.className ?? ''}`}>
-      <div className="chart-pad flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 px-4 pb-1 pt-4 sm:px-5">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h3 className="text-[15px] font-semibold leading-5 tracking-tight text-ink">{props.title}</h3>
-            {headline}
-          </div>
-          <div className="mt-0.5 text-xs leading-snug text-ink-3">
-            {period}
-            {props.subtitle ? <> · {props.subtitle}</> : null}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5" data-print-hide>
-          {!props.hideGranularity && <GranularityToggle className="mr-1" />}
-          <button type="button" className={iconBtn} onClick={() => setExpanded(true)} aria-label={`Expand chart: ${props.title}`} title="Expand">
-            <Glyph d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
-          </button>
-          <button type="button" className={iconBtn} onClick={() => setPrinting(true)} aria-label={`Print chart: ${props.title}`} title="Print / save as PDF">
-            <Glyph d="M7 9V4h10v5M7 17H5v-6h14v6h-2M7 14h10v6H7z" />
-          </button>
-        </div>
-      </div>
-      <div className="chart-pad min-w-0 flex-1 px-4 pb-4 pt-3 sm:px-5">
-        {props.render({ expanded: false, print: false, height: 280 })}
-        {note}
-      </div>
+      <ChartHostProvider options={options} hidden={hidden} setHidden={setHidden}>
+        <ChartHostConsumer>
+          {(models) => (
+            <>
+              <div className="chart-pad flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 px-4 pb-1 pt-4 sm:px-5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <h3 className="text-[15px] font-semibold leading-5 tracking-tight text-ink">{props.title}</h3>
+                    {headline}
+                  </div>
+                  <div className="mt-0.5 text-xs leading-snug text-ink-3">{periodText}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-0.5" data-print-hide>
+                  {!props.hideGranularity && <GranularityToggle className="mr-1" />}
+                  <button type="button" className={iconBtn} onClick={() => setExpanded(true)} aria-label={`Expand chart: ${props.title}`} title="Expand">
+                    <Glyph d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+                  </button>
+                  <button type="button" className={iconBtn} onClick={() => setPrinting(true)} aria-label={`Print chart: ${props.title}`} title="Print">
+                    <Glyph d="M7 9V4h10v5M7 17H5v-6h14v6h-2M7 14h10v6H7z" />
+                  </button>
+                </div>
+              </div>
+              <div className="chart-pad min-w-0 flex-1 px-4 pb-4 pt-3 sm:px-5">
+                <ChartRoleScope value="card">{props.render({ expanded: false, print: false, height: 280, metric: defaultMetric })}</ChartRoleScope>
+                {note}
+              </div>
 
-      <Dialog
-        open={expanded}
-        onClose={close}
-        wide
-        title={props.title}
-      >
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs text-ink-3">
-            {headline}
-            {headline ? ' · ' : ''}
-            {period}
-            {props.subtitle ? <> · {props.subtitle}</> : null}
-          </div>
-          <div className="flex items-center gap-1">
-            {!props.hideGranularity && <GranularityToggle />}
-            <button type="button" className={iconBtn} onClick={() => setPrinting(true)} aria-label={`Print chart: ${props.title}`} title="Print / save as PDF">
-              <Glyph d="M7 9V4h10v5M7 17H5v-6h14v6h-2M7 14h10v6H7z" />
-            </button>
-          </div>
-        </div>
-        {expanded && props.render({ expanded: true, print: false, height: 420 })}
-        {note}
-      </Dialog>
+              {expanded && (
+                <ChartDialog
+                  title={props.title}
+                  headline={metricChanged ? null : headline}
+                  periodLine={periodText}
+                  granularity={props.hideGranularity ? null : <GranularityToggle />}
+                  metrics={props.metrics && props.metrics.length > 1 && metric ? { options: props.metrics, value: metric, onChange: setMetric } : undefined}
+                  options={options}
+                  onOptions={setOptions}
+                  canUseBars={!!(models.dialog ?? models.card)?.series.every((s) => (s.kind ?? 'line') === 'line')}
+                  showTable={showTable}
+                  onShowTable={setShowTable}
+                  chart={<ChartRoleScope value="dialog">{props.render({ expanded: true, print: false, height: 420, metric })}</ChartRoleScope>}
+                  table={(models.dialog ?? models.card) ? <ValuesTable model={(models.dialog ?? models.card)!} hidden={hidden} periodHead={periodHead} /> : null}
+                  how={how}
+                  note={note ? props.note : undefined}
+                  bodyRef={bodyRef}
+                  busy={busy}
+                  status={status}
+                  onPrint={() => setPrinting(true)}
+                  onPdf={() => void savePdf(models)}
+                  onClose={close}
+                />
+              )}
 
-      {printing &&
-        createPortal(
-          <div className="print-sheet" aria-hidden="true">
-            <h2 className="text-xl font-semibold text-black">{props.title}</h2>
-            <p className="mt-1 text-sm text-black">
-              {PLATFORM_LABELS[platform]} · {period} · {granularity === 'daily' ? 'Daily' : 'Monthly'} · Demo data, not real business results
-            </p>
-            {props.total !== undefined && (
-              <p className="mt-1 text-sm text-black">
-                {props.totalLabel ?? 'Period total'}: <strong>{props.total}</strong>
-              </p>
-            )}
-            <div className="mt-4">{props.render({ expanded: true, print: true, height: 420, fixedWidth: 1000 })}</div>
-            {note}
-          </div>,
-          document.body,
-        )}
+              {printing &&
+                createPortal(
+                  <div className="print-sheet" aria-hidden="true">
+                    <h2 className="text-xl font-semibold text-black">{props.title}</h2>
+                    <p className="mt-1 text-sm text-black">
+                      {period} · {scope} · {granLabel}
+                    </p>
+                    {props.total !== undefined && (
+                      <p className="mt-1 text-sm text-black">
+                        {props.totalLabel ?? 'Period total'}: <strong>{props.total}</strong>
+                      </p>
+                    )}
+                    <div className="mt-4">
+                      <ChartRoleScope value="print">{props.render({ expanded: true, print: true, height: 420, fixedWidth: 1000, metric: defaultMetric })}</ChartRoleScope>
+                    </div>
+                    {note}
+                    <p className="mt-3 text-xs text-black">How it is calculated: {how}</p>
+                    {models.print && <ValuesTable model={models.print} hidden={hidden} periodHead={periodHead} className="print-values mt-3" />}
+                    <p className="print-footer mt-4 text-xs text-black">Synthetic demo data</p>
+                  </div>,
+                  document.body,
+                )}
+            </>
+          )}
+        </ChartHostConsumer>
+      </ChartHostProvider>
     </figure>
   );
+}
+
+function ChartHostConsumer({ children }: { children: (models: Partial<Record<string, ChartModel>>) => ReactNode }) {
+  const host = useChartHost();
+  return <>{children(host?.models ?? {})}</>;
 }

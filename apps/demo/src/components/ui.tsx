@@ -80,7 +80,8 @@ export function Button({ variant = 'secondary', size, className, ...rest }: Butt
 const TONES = {
   green: 'bg-positive-soft text-positive',
   gray: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200',
-  amber: 'bg-warn-soft text-warn',
+  amber: 'bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200',
+  orange: 'bg-orange-50 text-orange-700',
   red: 'bg-negative-soft text-negative',
   blue: 'bg-brand-soft text-brand-hover',
   violet: 'bg-section-boost-soft text-section-boost',
@@ -88,7 +89,7 @@ const TONES = {
 } as const;
 
 export type Tone = keyof typeof TONES | 'neutral' | 'meta' | 'google' | 'combined' | 'good' | 'bad' | 'warn' | 'info';
-const TONE_ALIAS: Record<string, keyof typeof TONES> = { neutral: 'gray', meta: 'blue', google: 'amber', combined: 'violet', good: 'green', bad: 'red', warn: 'amber', info: 'blue' };
+const TONE_ALIAS: Record<string, keyof typeof TONES> = { neutral: 'gray', meta: 'blue', google: 'orange', combined: 'violet', good: 'green', bad: 'red', warn: 'amber', info: 'blue' };
 
 export function Badge({ tone = 'gray', children, title }: { tone?: Tone; children: ReactNode; title?: string }) {
   const key = (tone in TONES ? tone : TONE_ALIAS[tone]) as keyof typeof TONES;
@@ -109,7 +110,7 @@ export function StatusPill({ status }: { status: string }) {
     ended: { cls: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', label: 'Ended' },
     completed: { cls: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', label: 'Ended' },
     removed: { cls: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', label: 'Removed' },
-    draft: { cls: 'bg-warn-soft text-warn', dot: 'bg-amber-500', label: 'Draft' },
+    draft: { cls: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', label: 'Draft' },
     learning: { cls: 'bg-brand-soft text-brand-hover', dot: 'bg-brand', label: 'Learning' },
     error: { cls: 'bg-negative-soft text-negative', dot: 'bg-negative', label: 'Error' },
   };
@@ -124,7 +125,7 @@ export function StatusPill({ status }: { status: string }) {
 
 const DQ = {
   ok: { cls: 'bg-positive', text: 'complete data' },
-  warn: { cls: 'bg-amber-500', text: 'partial data' },
+  warn: { cls: 'bg-slate-400', text: 'partial data' },
   bad: { cls: 'bg-negative', text: 'error or missing' },
   none: { cls: 'bg-slate-300', text: 'no data' },
 } as const;
@@ -246,7 +247,6 @@ export function KpiCard({
             <div className={`kpi-value truncate ${primary ? 'kpi-value-lg' : ''}`}>{value}</div>
           )}
         </div>
-        {!missing && sparkline && <div className="h-8 w-16 shrink-0 sm:w-20">{sparkline}</div>}
       </div>
       {missing ? (
         <p className="mt-1.5 text-xs text-slate-600">{reason ?? (state === 'no_calc' ? 'Not calculated' : 'No data')}</p>
@@ -259,6 +259,7 @@ export function KpiCard({
             </div>
           )}
           {sub && <div className="mt-1.5 text-xs leading-snug text-slate-600">{sub}</div>}
+          {sparkline && <div className="-mx-4 -mb-3.5 mt-2 h-9 overflow-hidden rounded-b-[inherit]">{sparkline}</div>}
         </>
       )}
     </div>
@@ -380,9 +381,9 @@ export function ShareBar({ parts, label }: { parts: { label: string; value: numb
 /* Messages ----------------------------------------------------------------------------- */
 
 const NOTICE = {
-  amber: { box: 'border-amber-200/80 bg-warn-soft/70', icon: 'text-amber-700', title: 'text-amber-950', body: 'text-amber-950/90', word: 'Warning', path: 'M12 8v5M12 16.5v.01M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z' },
+  amber: { box: 'border-line bg-slate-50', icon: 'text-slate-500', title: 'text-ink', body: 'text-ink-2', word: 'Note', path: 'M12 11v5M12 7.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
   red: { box: 'border-red-200/80 bg-negative-soft/70', icon: 'text-negative', title: 'text-red-950', body: 'text-red-950/90', word: 'Error', path: 'M12 8v5M12 16.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
-  blue: { box: 'border-blue-200/70 bg-brand-soft/70', icon: 'text-brand', title: 'text-blue-950', body: 'text-blue-950/90', word: 'Information', path: 'M12 11v5M12 7.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
+  blue: { box: 'border-line bg-slate-50', icon: 'text-slate-500', title: 'text-ink', body: 'text-ink-2', word: 'Note', path: 'M12 11v5M12 7.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
   gray: { box: 'border-line bg-slate-50', icon: 'text-slate-500', title: 'text-ink', body: 'text-ink-2', word: 'Note', path: 'M12 11v5M12 7.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
   green: { box: 'border-green-200/80 bg-positive-soft/70', icon: 'text-positive', title: 'text-green-950', body: 'text-green-950/90', word: 'Success', path: 'M8 12.5l2.7 2.7L16 9.5M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' },
 } as const;
@@ -471,11 +472,37 @@ export function Dialog(props: { open: boolean; title: string; onClose: () => voi
   );
 }
 
-/** Banner stating that an action is simulated. Required wording. */
+/** Subtle neutral line stating that an action is simulated. Required wording. */
 export function SimulationNotice() {
   return (
-    <Notice tone="amber" title="Demo simulation">
-      No real advertising account is affected.
-    </Notice>
+    <p className="flex items-center gap-1.5 text-xs text-ink-3" data-testid="simulation-note">
+      <svg aria-hidden viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+        <path d="M12 11v5M12 7.5v.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z" />
+      </svg>
+      Simulated in this browser — no real campaign was changed.
+    </p>
+  );
+}
+
+/** Boxed tab group (platform / scope switch): white rounded box, the active tab has a light brand fill. */
+export function BoxTabs<T extends string>(props: { value: T; options: readonly { value: T; label: ReactNode }[]; onChange: (v: T) => void; label: string }) {
+  return (
+    <div role="tablist" aria-label={props.label} className="no-scrollbar inline-flex max-w-full gap-0.5 overflow-x-auto rounded-xl border border-line bg-white p-1 shadow-sm">
+      {props.options.map((o) => {
+        const on = o.value === props.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => props.onChange(o.value)}
+            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition-colors ${on ? 'bg-brand-soft font-semibold text-brand' : 'font-medium text-ink-2 hover:bg-slate-50 hover:text-ink'}`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

@@ -162,6 +162,7 @@ export function SimProvider({ children }: { children: ReactNode }) {
       dismiss: (key) => dispatch({ type: 'dismiss', key }),
       restore: (key) => dispatch({ type: 'restore', key }),
       restoreAll: () => dispatch({ type: 'restoreAll' }),
+      logActivity: (a) => dispatch({ type: 'log', activity: { ...a, at: nowIso(), actor } }),
     }),
     [state, role, actor, review, confirm, logRejection, create, saveDraft, deleteDraft],
   );

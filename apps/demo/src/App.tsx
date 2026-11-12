@@ -9,6 +9,7 @@ const CombinedOverviewPage = lazy(() => import('./pages/CombinedOverviewPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
+const AdDetailPage = lazy(() => import('./pages/AdDetailPage'));
 const CreatePage = lazy(() => import('./pages/CreatePage'));
 const DraftsPage = lazy(() => import('./pages/DraftsPage'));
 const SalesPage = lazy(() => import('./pages/SalesPage'));
@@ -17,6 +18,7 @@ const AttributionPage = lazy(() => import('./pages/AttributionPage'));
 const ComparisonPage = lazy(() => import('./pages/ComparisonPage'));
 const AssistantPage = lazy(() => import('./pages/AssistantPage'));
 const RecommendationsPage = lazy(() => import('./pages/RecommendationsPage'));
+const RecommendationDetailPage = lazy(() => import('./pages/RecommendationDetailPage'));
 const DataSourcesPage = lazy(() => import('./pages/DataSourcesPage'));
 const ActivityPage = lazy(() => import('./pages/ActivityPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
@@ -35,6 +37,7 @@ export const routeObjects = [
       { path: 'combined', element: page(<CombinedOverviewPage />) },
       { path: 'campaigns', element: page(<CampaignsPage />) },
       { path: 'campaigns/:campaignId', element: page(<CampaignDetailPage />) },
+      { path: 'ads/:adId', element: page(<AdDetailPage />) },
       { path: 'create', element: page(<CreatePage />) },
       { path: 'drafts', element: page(<DraftsPage />) },
       { path: 'sales', element: page(<SalesPage />) },
@@ -43,6 +46,7 @@ export const routeObjects = [
       { path: 'compare', element: page(<ComparisonPage />) },
       { path: 'assistant', element: page(<AssistantPage />) },
       { path: 'recommendations', element: page(<RecommendationsPage />) },
+      { path: 'recommendations/:recKey', element: page(<RecommendationDetailPage />) },
       { path: 'data-sources', element: page(<DataSourcesPage />) },
       { path: 'activity', element: page(<ActivityPage />) },
       { path: 'users', element: page(<UsersPage />) },

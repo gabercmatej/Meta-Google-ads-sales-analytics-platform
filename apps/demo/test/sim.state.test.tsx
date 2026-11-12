@@ -6,6 +6,8 @@ import { SimProvider } from '../src/sim/SimProvider';
 import { confirmChange, createObjects, reviewChange, VIEWER_TOOLTIP, type EffectiveEntity } from '../src/sim/changeFlow';
 import { emptySimState, loadSimState, parseSimState, saveSimState, simReducer, SIM_STORAGE_KEY, type SimState, type StorageLike } from '../src/sim/simCore';
 import { validateDraft } from '../src/sim/draftValidation';
+import { getDataset } from '../src/lib/data';
+import { seedActivity } from '../src/lib/activitySeed';
 import ActivityPage from '../src/pages/ActivityPage';
 import AssistantPage from '../src/pages/AssistantPage';
 
@@ -208,6 +210,9 @@ describe('assistant and activity pages', () => {
     expect(screen.getByRole('dialog', { name: 'Reset demo' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Reset everything' }));
     await waitFor(() => expect(screen.getAllByText('Reset demo').length).toBeGreaterThan(0));
-    expect(screen.getByText('1 entries')).toBeTruthy();
+    // Exactly one session entry (the reset) on top of the seeded synthetic history; the history itself is kept.
+    const seeded = seedActivity(getDataset()).length;
+    expect(screen.getByText(`${seeded + 1} entries`)).toBeTruthy();
+    expect(screen.getAllByText('Synthetic history').length).toBeGreaterThan(0);
   });
 });

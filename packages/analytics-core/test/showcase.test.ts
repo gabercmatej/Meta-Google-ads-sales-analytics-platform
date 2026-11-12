@@ -13,6 +13,7 @@ const fs = nodeProcess.getBuiltinModule('node:fs') as NodeFs;
 const url = nodeProcess.getBuiltinModule('node:url') as { fileURLToPath(u: string): string };
 
 const ds = generateShowcaseDataset();
+const dsGaps = generateShowcaseDataset({ plantedGaps: true });
 const FULL = { start: ds.range.start, end: '2026-11-10' };
 
 describe('showcase generator', () => {
@@ -26,8 +27,8 @@ describe('showcase generator', () => {
     generateShowcaseDataset({ seed: 11 });
     expect(Date.now() - t).toBeLessThan(1500);
     const months = new Set(ds.daily.map((r) => monthKey(r.date)));
-    expect(months.size).toBeGreaterThanOrEqual(12);
-    expect(ds.range).toEqual({ start: '2025-10-01', end: '2026-11-11' });
+    expect(months.size).toBeGreaterThanOrEqual(24);
+    expect(ds.range).toEqual({ start: '2024-11-01', end: '2026-11-11' });
   });
 
   it('stores money as integers and never emits forbidden patterns', () => {
@@ -60,26 +61,29 @@ describe('showcase generator', () => {
 
 describe('planted cases', () => {
   const p = ds.planted!;
+  const pg = dsGaps.planted!;
   const order = (id: string) => ds.orders.find((o) => o.id === id)!;
 
-  it('Google gap day has no Google rows and Meta gap day has no Meta rows', () => {
-    expect(p.googleMissingDate).toBe('2026-10-03');
-    expect(p.metaSourceErrorDate).toBe('2026-10-19');
-    expect(ds.daily.some((r) => r.platform === 'google' && r.date === p.googleMissingDate)).toBe(false);
-    expect(ds.daily.some((r) => r.platform === 'meta' && r.date === p.googleMissingDate)).toBe(true);
-    expect(ds.daily.some((r) => r.platform === 'meta' && r.date === p.metaSourceErrorDate)).toBe(false);
-    expect(ds.sourceDays.find((s) => s.source === 'google' && s.date === p.googleMissingDate)?.status).toBe('missing');
-    expect(ds.sourceDays.find((s) => s.source === 'meta' && s.date === p.metaSourceErrorDate)?.status).toBe('source_error');
+  it('Google gap day has no Google rows and Meta gap day has no Meta rows (opt-in plantedGaps)', () => {
+    expect(pg.googleMissingDate).toBe('2026-10-03');
+    expect(pg.metaSourceErrorDate).toBe('2026-10-19');
+    expect(dsGaps.daily.some((r) => r.platform === 'google' && r.date === pg.googleMissingDate)).toBe(false);
+    expect(dsGaps.daily.some((r) => r.platform === 'meta' && r.date === pg.googleMissingDate)).toBe(true);
+    expect(dsGaps.daily.some((r) => r.platform === 'meta' && r.date === pg.metaSourceErrorDate)).toBe(false);
+    expect(dsGaps.sourceDays.find((s) => s.source === 'google' && s.date === pg.googleMissingDate)?.status).toBe('missing');
+    expect(dsGaps.sourceDays.find((s) => s.source === 'meta' && s.date === pg.metaSourceErrorDate)?.status).toBe('source_error');
+    expect(p.googleMissingDate).toBeNull();
+    expect(p.metaSourceErrorDate).toBeNull();
   });
 
   it('gap days are null in series and excluded from combined totals', () => {
     const range = { start: '2026-10-01', end: '2026-10-05' };
-    const gap = q.metricSeries(ds, { metric: 'spend', range, granularity: 'daily' }).find((d) => d.key === '2026-10-03')!;
+    const gap = q.metricSeries(dsGaps, { metric: 'spend', range, granularity: 'daily' }).find((d) => d.key === '2026-10-03')!;
     expect(gap.google).toBeNull();
     expect(gap.total).toBeNull();
     expect(gap.meta).toBeGreaterThan(0);
     expect(gap.dayStatus).toBe('missing_google');
-    const t = q.performanceTotals(ds, 'combined', range);
+    const t = q.performanceTotals(dsGaps, 'combined', range);
     expect(t.missingDates).toEqual(['2026-10-03']);
     expect(t.completeDays).toBe(4);
     expect(t.partial).toBe(true);
@@ -161,7 +165,7 @@ describe('showcase queries', () => {
     expect(q.resolveShowcaseRange(ds, 'custom')).toBeNull();
     expect(q.resolveShowcaseRange(ds, 'yearToDate')).toEqual({ start: '2026-01-01', end: '2026-11-10' });
     expect(q.resolveShowcaseRange(ds, 'custom', { start: '2020-01-01', end: '2020-01-31' })).toBeNull();
-    expect(q.resolveShowcaseRange(ds, 'custom', { start: '2020-01-01', end: '2025-10-05' })!.start).toBe('2025-10-01');
+    expect(q.resolveShowcaseRange(ds, 'custom', { start: '2020-01-01', end: '2025-10-05' })!.start).toBe('2024-11-01');
   });
 
   it('computes ratios from sums, not averages of daily ratios', () => {
@@ -202,8 +206,13 @@ describe('showcase queries', () => {
     }
   });
 
-  it('marks months with gaps or the current month as incomplete', () => {
+  it('default dataset marks only the current month as incomplete', () => {
     const monthly = q.metricSeries(ds, { metric: 'spend', range: { start: '2026-09-01', end: '2026-11-10' }, granularity: 'monthly' });
+    expect(monthly.map((m) => m.incomplete)).toEqual([false, false, true]);
+  });
+
+  it('marks months with gaps or the current month as incomplete (opt-in plantedGaps)', () => {
+    const monthly = q.metricSeries(dsGaps, { metric: 'spend', range: { start: '2026-09-01', end: '2026-11-10' }, granularity: 'monthly' });
     expect(monthly.map((m) => m.incomplete)).toEqual([false, true, true]);
     expect(monthly[2]!.label).toBe('Nov 2026');
   });
@@ -274,7 +283,9 @@ describe('showcase queries', () => {
     const st = q.dataSourceStatus(ds);
     expect(st).toHaveLength(5);
     expect(st.every((s) => s.mode === 'simulated' && s.lastSyncAt === ds.referenceNow)).toBe(true);
-    expect(st.find((s) => s.id === 'google')!.issues.map((i) => i.status).sort()).toEqual(['missing', 'partial']);
+    expect(st.find((s) => s.id === 'google')!.issues.map((i) => i.status).sort()).toEqual([]);
+    const gapSt = q.dataSourceStatus(dsGaps);
+    expect(gapSt.find((s) => s.id === 'google')!.issues.map((i) => i.status).sort()).toEqual(['missing']);
   });
 
   it('integrity checks: none fail, PARTIAL always has a category', { timeout: 60_000 }, () => {
@@ -285,5 +296,68 @@ describe('showcase queries', () => {
       for (const c of checks) expect(c.status === 'PARTIAL' ? !!c.category : c.category === undefined).toBe(true);
       expect(new Set(checks.map((c) => c.id)).size).toBe(checks.length);
     }
+  });
+});
+
+describe('complete default dataset', () => {
+  const YTD = { start: '2026-01-01', end: '2026-11-10' };
+  it('has 314/314 ok days for Meta, Google and combined in 2026-01-01..2026-11-10', () => {
+    expect(enumerateDays(YTD)).toHaveLength(314);
+    const series = q.metricSeries(ds, { metric: 'spend', range: YTD, granularity: 'daily' });
+    expect(series.filter((d) => d.meta !== null && d.meta > 0)).toHaveLength(314);
+    expect(series.filter((d) => d.google !== null && d.google > 0)).toHaveLength(314);
+    expect(series.filter((d) => d.total !== null && d.dayStatus === 'complete')).toHaveLength(314);
+    expect(ds.sourceDays.filter((s) => s.date <= '2026-11-10')).toEqual([]);
+    const t = q.performanceTotals(ds, 'combined', YTD);
+    expect(t.missingDates).toEqual([]);
+    expect(t.completeDays).toBe(314);
+    expect(t.partial).toBe(false);
+    // the previous periods of "This year" and "Last 365 days" exist in full
+    expect(q.performanceTotals(ds, 'combined', { start: '2025-01-01', end: '2025-11-10' }).partial).toBe(false);
+    expect(q.performanceTotals(ds, 'combined', { start: '2024-11-11', end: '2025-11-10' }).partial).toBe(false);
+  });
+
+  it('has rows for every entity inside its active window and none outside it', () => {
+    const campaignById = new Map(ds.campaigns.map((c) => [c.id, c]));
+    const adById = new Map(ds.ads.map((a) => [a.id, a]));
+    const byAd = new Map<string, string[]>();
+    for (const r of ds.daily) {
+      const list = byAd.get(r.adId) ?? [];
+      list.push(r.date);
+      byAd.set(r.adId, list);
+      expect(r.date >= campaignById.get(r.campaignId)!.startDate).toBe(true);
+      expect(r.date >= adById.get(r.adId)!.launchDate).toBe(true);
+    }
+    for (const a of ds.ads) {
+      const dates = byAd.get(a.id);
+      expect(dates, a.id).toBeDefined();
+      expect(dates!.reduce((x, y) => (x < y ? x : y)), a.id).toBe(a.launchDate);
+      if (a.status === 'ACTIVE') expect(dates!.includes('2026-11-10'), a.id).toBe(true);
+    }
+    for (const c of ds.campaigns) {
+      const first = ds.daily.filter((r) => r.campaignId === c.id).reduce((m, r) => (r.date < m ? r.date : m), '9999');
+      expect(first, c.id).toBe(c.startDate);
+    }
+    const c5 = q.entityPerformance(ds, { level: 'campaign', view: 'meta', range: { start: '2024-11-01', end: '2026-03-15' } }).find((r) => r.id === 'meta-c5')!;
+    expect(c5.current.spendMinor).toBeNull();
+  });
+
+  it('reconciles: Meta + Google = combined, monthly = sum of daily, paid orders, ROAS from sums', () => {
+    const range = { start: '2024-11-01', end: '2026-11-10' };
+    const daily = q.metricSeries(ds, { metric: 'spend', range, granularity: 'daily' });
+    for (const d of daily) expect(d.total).toBe((d.meta ?? 0) + (d.google ?? 0));
+    const monthly = q.metricSeries(ds, { metric: 'spend', range, granularity: 'monthly' });
+    for (const m of monthly) {
+      const days = daily.filter((d) => monthKey(d.key) === m.key);
+      expect(m.total).toBe(days.reduce((a, d) => a + (d.total ?? 0), 0));
+    }
+    for (const basis of ['order', 'payment'] as const) {
+      const so = q.salesOverview(ds, { range, basis });
+      expect(so.partition.reconciles).toBe(true);
+      expect(so.partition.parts.reduce((a, x) => a + x.revenueMinor, 0)).toBe(so.partition.eligibleRevenueMinor);
+    }
+    const ao = q.attributionOverview(ds, { range });
+    expect(ao.roas.combined).toBe((ao.verified.meta.revenueMinor + ao.verified.google.revenueMinor) / ao.spend.totalMinor!);
+    expect(q.integrityChecks(ds, range).filter((c) => c.status === 'FAIL')).toEqual([]);
   });
 });
