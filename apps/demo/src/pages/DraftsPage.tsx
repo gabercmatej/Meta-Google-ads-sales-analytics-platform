@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { PageHeader, Card, Button, Badge, EmptyState, Dialog, SimulationNotice } from '../components/ui';
+import { PageTitle, Button, Badge, EmptyState, Dialog, SimulationNotice } from '../components/ui';
 import { PlatformBadge } from '../components/EntityBits';
 import { DraftForm, fromDraft, formErrors } from '../sim/DraftForm';
 import { useSim } from '../sim/simContext';
 import { canWrite, GOOGLE_VALIDATE_ONLY_MESSAGE, VIEWER_TOOLTIP } from '../sim/changeFlow';
 import type { Draft } from '../sim/simCore';
 import { dateTime, money } from '../lib/format';
-import './sim-pages.css';
 
 type RowNote = { tone: 'ok' | 'bad'; lines: string[] };
 
@@ -41,33 +40,33 @@ export default function DraftsPage() {
   };
 
   return (
-    <div className="drafts-page">
-      <PageHeader title="Drafts" description="Campaigns saved locally in this browser, for Meta and Google together. Drafts are never sent anywhere." badge={<Badge tone="warn">Simulated</Badge>} />
+    <div className="space-y-4">
+      <PageTitle title="Drafts" sub="Campaigns saved locally in this browser, for Meta and Google together. Drafts are never sent anywhere." badge={<Badge tone="warn">Simulated</Badge>} />
       <SimulationNotice />
       {sim.drafts.length === 0 ? (
         <EmptyState title="No drafts yet">Start in Create campaign and choose Save as draft.</EmptyState>
       ) : (
-        <div className="draft-list">
+        <div className="grid gap-3">
           {[...sim.drafts].reverse().map((d) => {
             const note = notes[d.id];
             return (
-              <Card key={d.id} className="draft-card">
-                <div className="draft-head">
+              <article key={d.id} className="card p-4 sm:p-5">
+                <div className="flex flex-wrap items-center gap-2">
                   <PlatformBadge platform={d.platform} />
-                  <strong>{d.campaignName || 'Untitled draft'}</strong>
-                  <span className="muted">Updated {dateTime(d.updatedAt)}</span>
+                  <strong className="text-sm text-ink">{d.campaignName || 'Untitled draft'}</strong>
+                  <span className="text-xs text-ink-3">Updated {dateTime(d.updatedAt)}</span>
                 </div>
-                <p className="muted">
+                <p className="mt-1.5 text-sm text-ink-2">
                   Daily budget {money(d.dailyBudgetMinor)} · {d.includeAd ? `Ad: ${d.adName || '–'}` : 'No ad'}
                 </p>
                 {note && (
-                  <ul className={note.tone === 'ok' ? 'draft-note-ok' : 'sim-issues'} role={note.tone === 'ok' ? 'status' : 'alert'}>
+                  <ul className={`mt-2 rounded-lg py-2 pl-7 pr-3 text-sm ${note.tone === 'ok' ? 'bg-positive-soft text-ink' : 'bg-negative-soft text-negative'}`} role={note.tone === 'ok' ? 'status' : 'alert'}>
                     {note.lines.map((l) => (
                       <li key={l}>{l}</li>
                     ))}
                   </ul>
                 )}
-                <div className="draft-actions">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => setEditing(d)}>
                     Edit
                   </Button>
@@ -83,7 +82,7 @@ export default function DraftsPage() {
                     Delete
                   </Button>
                 </div>
-              </Card>
+              </article>
             );
           })}
         </div>

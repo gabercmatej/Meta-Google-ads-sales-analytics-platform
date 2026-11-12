@@ -3,8 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { CreativeTheme, Platform, ShowcaseCreative } from '@sedem-ads/analytics-core';
-import { Badge, Button, SimulationNotice } from '../components/ui';
-import { Notice } from '../components/Notes';
+import { Badge, Button, Notice, SimulationNotice, StatList, StatRow, inputCls } from '../components/ui';
 import { AdPreview } from '../components/AdPreview';
 import { CHANNEL_LABEL, OBJECTIVE_LABEL } from '../components/EntityBits';
 import { money } from '../lib/format';
@@ -12,8 +11,6 @@ import { useSim } from './simContext';
 import { canWrite, GOOGLE_VALIDATE_ONLY_MESSAGE, VIEWER_TOOLTIP, type CreateResult } from './changeFlow';
 import { validateDraft, URL_PREFIX, type DraftErrors } from './draftValidation';
 import type { Draft } from './simCore';
-import './sim.css';
-import '../pages/sim-pages.css';
 
 export interface FormState {
   id?: string;
@@ -136,28 +133,61 @@ export function previewCreative(f: FormState): ShowcaseCreative {
   };
 }
 
-const STEPS = ['Campaign', 'Ad', 'Review'] as const;
+type StepId = 'objective' | 'campaign' | 'audience' | 'creative' | 'extras' | 'review' | 'save';
+const STEP_LABEL: Record<StepId, string> = {
+  objective: 'Objective',
+  campaign: 'Campaign',
+  audience: 'Audience',
+  creative: 'Creative',
+  extras: 'Extensions',
+  review: 'Review',
+  save: 'Save draft',
+};
+const STEP_FLOW: Record<Platform, StepId[]> = {
+  meta: ['objective', 'campaign', 'audience', 'creative', 'review', 'save'],
+  google: ['objective', 'campaign', 'audience', 'creative', 'extras', 'review', 'save'],
+};
 const CAMPAIGN_FIELDS: (keyof DraftErrors)[] = ['campaignName', 'dailyBudget'];
 const AD_FIELDS: (keyof DraftErrors)[] = ['adName', 'headline', 'primaryText', 'callToAction', 'finalUrl'];
 
-function Field(props: { id: string; label: string; error?: string; hint?: string; children: (p: { id: string; 'aria-invalid': boolean; 'aria-describedby'?: string }) => React.ReactNode }) {
+const labelCls = 'text-xs font-semibold text-ink-2';
+const fieldCls = `${inputCls} !h-9 w-full`;
+
+function Field(props: { id: string; label: string; error?: string; hint?: string; children: (p: { id: string; 'aria-invalid': boolean; 'aria-describedby'?: string; className: string }) => React.ReactNode }) {
   const describedBy = props.error ? `${props.id}-err` : props.hint ? `${props.id}-hint` : undefined;
   return (
-    <div className="sim-field">
-      <label htmlFor={props.id}>{props.label}</label>
-      {props.children({ id: props.id, 'aria-invalid': Boolean(props.error), ...(describedBy ? { 'aria-describedby': describedBy } : {}) })}
+    <div className="grid gap-1">
+      <label htmlFor={props.id} className={labelCls}>
+        {props.label}
+      </label>
+      {props.children({
+        id: props.id,
+        'aria-invalid': Boolean(props.error),
+        ...(describedBy ? { 'aria-describedby': describedBy } : {}),
+        className: `${fieldCls} ${props.error ? '!border-negative' : ''}`,
+      })}
       {props.error ? (
-        <span className="field-error" id={`${props.id}-err`} role="alert">
+        <span className="text-xs text-negative" id={`${props.id}-err`} role="alert">
           {props.error}
         </span>
       ) : (
         props.hint && (
-          <span className="muted" id={`${props.id}-hint`}>
+          <span className="text-2xs text-ink-3" id={`${props.id}-hint`}>
             {props.hint}
           </span>
         )
       )}
     </div>
+  );
+}
+
+function StepCard(props: { title: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <section className="card p-4 sm:p-5">
+      <h2 className="text-sm font-semibold text-ink">{props.title}</h2>
+      {props.sub && <p className="mt-0.5 text-xs text-ink-3">{props.sub}</p>}
+      <div className="mt-4 grid gap-4">{props.children}</div>
+    </section>
   );
 }
 
@@ -172,6 +202,8 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
   const prefix = props.idPrefix ?? 'df';
   const allowed = canWrite(sim.role);
   const errors = useMemo(() => formErrors(f), [f]);
+  const flow = STEP_FLOW[f.platform];
+  const current = flow[Math.min(step, flow.length - 1)] as StepId;
   const shown = (k: keyof DraftErrors) => (touched.has(k) || touched.has('*') ? errors[k] : undefined);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setF((s) => ({ ...s, [k]: v }));
@@ -183,15 +215,15 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
   const allOk = Object.keys(errors).length === 0;
 
   const next = () => {
-    if (step === 0) {
+    if (current === 'campaign') {
       touch(CAMPAIGN_FIELDS);
       if (!campaignOk) return;
     }
-    if (step === 1) {
+    if (current === 'creative') {
       touch(AD_FIELDS);
       if (!adOk) return;
     }
-    setStep((s) => Math.min(2, s + 1));
+    setStep((s) => Math.min(flow.length - 1, s + 1));
   };
 
   const save = () => {
@@ -226,27 +258,23 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
   if (result?.success) {
     const validatedOnly = result.mode === 'validated_only';
     return (
-      <div className="sim-dialog" role="status">
-        <div className="sim-result sim-result-ok">
+      <div className="card grid gap-3 p-4 sm:p-5" role="status">
+        <div className="grid gap-1 rounded-lg bg-positive-soft p-3 text-sm text-ink">
           <strong>{validatedOnly ? 'Validated only' : 'Created in simulation (PAUSED)'}</strong>
           <span>{result.message}</span>
           {validatedOnly && <span>{GOOGLE_VALIDATE_ONLY_MESSAGE}</span>}
         </div>
         {!validatedOnly && (
-          <ul className="create-ids">
+          <ul className="grid gap-1.5 pl-5 text-sm">
             {result.entities.map((e) => (
               <li key={e.id}>
-                {e.level === 'ad' ? 'Ad' : 'Campaign'} <strong>{e.name}</strong> <Badge tone="warn">{e.status}</Badge> <code>{e.id}</code>
+                {e.level === 'ad' ? 'Ad' : 'Campaign'} <strong>{e.name}</strong> <Badge tone="warn">{e.status}</Badge> <code className="text-xs">{e.id}</code>
               </li>
             ))}
           </ul>
         )}
-        <p className="muted">
-          {validatedOnly
-            ? 'The draft is kept so you can adjust it.'
-            : 'Activation is a separate confirmed action: use Resume on the campaign row.'}
-        </p>
-        <div className="create-actions">
+        <p className="text-xs text-ink-3">{validatedOnly ? 'The draft is kept so you can adjust it.' : 'Activation is a separate confirmed action: use Resume on the campaign row.'}</p>
+        <div className="flex flex-wrap items-center gap-2">
           {!validatedOnly && (
             <Link className="btn btn-primary btn-sm" to="/campaigns">
               Open campaigns
@@ -264,29 +292,45 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
   }
 
   const objectiveLabel = (o: string) => (f.platform === 'meta' ? OBJECTIVE_LABEL[o] : CHANNEL_LABEL[o]) ?? o;
+  const unit = f.platform === 'meta' ? 'ad set' : 'ad group';
+  const search = f.platform === 'google' && f.objective === 'SEARCH';
 
   return (
-    <div className="create-grid">
-      <div className="create-form">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
+      <div className="grid min-w-0 gap-4">
         <SimulationNotice />
-        <ol className="sim-steps" aria-label="Steps">
-          {STEPS.map((s, i) => (
-            <li key={s} data-done={i < step ? 'true' : undefined} aria-current={i === step ? 'step' : undefined}>
-              {s}
-            </li>
-          ))}
+        <ol className="no-scrollbar flex gap-2 overflow-x-auto" aria-label="Steps">
+          {flow.map((s, i) => {
+            const done = i < step;
+            const on = i === step;
+            return (
+              <li
+                key={s}
+                data-done={done ? 'true' : undefined}
+                aria-current={on ? 'step' : undefined}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                  on ? 'border-brand bg-brand-soft text-brand' : done ? 'border-transparent bg-positive-soft text-positive' : 'border-line bg-slate-50 text-ink-3'
+                }`}
+              >
+                <span className="tabular">{i + 1}.</span> {STEP_LABEL[s]}
+              </li>
+            );
+          })}
         </ol>
 
-        {step === 0 && (
-          <fieldset className="create-fieldset">
-            <legend>Campaign</legend>
-            <div className="sim-field">
-              <label htmlFor={`${prefix}-platform`}>Platform</label>
+        {current === 'objective' && (
+          <StepCard title={f.platform === 'meta' ? 'Choose an objective' : 'Choose a channel'} sub="Platform and goal of the new campaign. The demo never sends anything to Meta or Google.">
+            <div className="grid gap-1">
+              <label htmlFor={`${prefix}-platform`} className={labelCls}>
+                Platform
+              </label>
               <select
                 id={`${prefix}-platform`}
+                className={fieldCls}
                 value={f.platform}
                 onChange={(e) => {
                   const p = e.target.value as Platform;
+                  setStep(0);
                   setF((s) => ({ ...s, platform: p, objective: OBJECTIVES[p][0] ?? s.objective }));
                 }}
               >
@@ -294,9 +338,11 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
                 <option value="google">Google Ads (validate-only)</option>
               </select>
             </div>
-            <div className="sim-field">
-              <label htmlFor={`${prefix}-objective`}>{f.platform === 'meta' ? 'Objective' : 'Channel'}</label>
-              <select id={`${prefix}-objective`} value={f.objective} onChange={(e) => set('objective', e.target.value)}>
+            <div className="grid gap-1">
+              <label htmlFor={`${prefix}-objective`} className={labelCls}>
+                {f.platform === 'meta' ? 'Objective' : 'Channel'}
+              </label>
+              <select id={`${prefix}-objective`} className={fieldCls} value={f.objective} onChange={(e) => set('objective', e.target.value)}>
                 {OBJECTIVES[f.platform].map((o) => (
                   <option key={o} value={o}>
                     {objectiveLabel(o)}
@@ -304,23 +350,40 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
                 ))}
               </select>
             </div>
+            {f.platform === 'google' && <Notice tone="warn">{GOOGLE_VALIDATE_ONLY_MESSAGE}.</Notice>}
+          </StepCard>
+        )}
+
+        {current === 'campaign' && (
+          <StepCard title="Campaign and budget" sub="Name the campaign and set a daily budget in EUR.">
             <Field id={`${prefix}-name`} label="Campaign name" error={shown('campaignName')}>
               {(p) => <input {...p} value={f.campaignName} onChange={(e) => set('campaignName', e.target.value)} onBlur={() => touch(['campaignName'])} />}
             </Field>
             <Field id={`${prefix}-budget`} label="Daily budget (EUR)" error={shown('dailyBudget')} hint="Between €5.00 and €1,000.00">
               {(p) => <input {...p} inputMode="decimal" value={f.budgetText} onChange={(e) => set('budgetText', e.target.value)} onBlur={() => touch(['dailyBudget'])} />}
             </Field>
-            <label className="create-check">
+            <label className="flex items-center gap-2 text-sm text-ink-2">
               <input type="checkbox" checked={f.includeAd} onChange={(e) => set('includeAd', e.target.checked)} /> Add a first ad
             </label>
-          </fieldset>
+          </StepCard>
         )}
 
-        {step === 1 && (
-          <fieldset className="create-fieldset">
-            <legend>Ad</legend>
+        {current === 'audience' && (
+          <StepCard title={f.platform === 'meta' ? 'Ad set: audience and placements' : 'Ad group: targeting'} sub={`A ${unit} is created together with the campaign.`}>
+            <StatList>
+              <StatRow label={f.platform === 'meta' ? 'Audience' : 'Targeting'} value={f.platform === 'meta' ? 'Broad, Slovenia (demo)' : search ? 'Keywords: demo theme' : 'Automated (demo)'} />
+              <StatRow label={f.platform === 'meta' ? 'Placements' : 'Networks'} value={f.platform === 'meta' ? 'Automatic' : search ? 'Search' : 'Display'} />
+              <StatRow label="Budget" value={money(parseBudgetMinor(f.budgetText))} hint="per day" />
+              <StatRow label="Status after creation" value={<Badge tone="warn">PAUSED</Badge>} />
+            </StatList>
+            <p className="text-xs text-ink-3">The demo uses fixed targeting. In the real product this step edits the {unit}.</p>
+          </StepCard>
+        )}
+
+        {current === 'creative' && (
+          <StepCard title={f.platform === 'meta' ? 'Ad creative' : 'Ad copy'} sub="The preview updates as you type.">
             {!f.includeAd ? (
-              <p className="muted">No ad will be created. Go back to the campaign step to add one.</p>
+              <p className="text-sm text-ink-3">No ad will be created. Go back to the campaign step to add one.</p>
             ) : (
               <>
                 <Field id={`${prefix}-adname`} label="Ad name" error={shown('adName')}>
@@ -330,48 +393,65 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
                   {(p) => <input {...p} value={f.headline} onChange={(e) => set('headline', e.target.value)} onBlur={() => touch(['headline'])} />}
                 </Field>
                 <Field id={`${prefix}-text`} label="Primary text" error={shown('primaryText')} hint={`${f.primaryText.length}/300`}>
-                  {(p) => <textarea {...p} rows={3} value={f.primaryText} onChange={(e) => set('primaryText', e.target.value)} onBlur={() => touch(['primaryText'])} />}
+                  {(p) => <textarea {...p} className={`${p.className} !h-auto py-2`} rows={3} value={f.primaryText} onChange={(e) => set('primaryText', e.target.value)} onBlur={() => touch(['primaryText'])} />}
                 </Field>
-                <Field id={`${prefix}-cta`} label="Call to action" error={shown('callToAction')}>
-                  {(p) => (
-                    <select {...p} value={f.callToAction} onChange={(e) => set('callToAction', e.target.value)}>
-                      {CTA_OPTIONS.map((c) => (
-                        <option key={c}>{c}</option>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field id={`${prefix}-cta`} label="Call to action" error={shown('callToAction')}>
+                    {(p) => (
+                      <select {...p} value={f.callToAction} onChange={(e) => set('callToAction', e.target.value)}>
+                        {CTA_OPTIONS.map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                    )}
+                  </Field>
+                  <div className="grid gap-1">
+                    <label htmlFor={`${prefix}-theme`} className={labelCls}>
+                      Visual theme
+                    </label>
+                    <select id={`${prefix}-theme`} className={fieldCls} value={f.theme} onChange={(e) => set('theme', e.target.value as CreativeTheme)}>
+                      {THEME_OPTIONS.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
                       ))}
                     </select>
-                  )}
-                </Field>
+                  </div>
+                </div>
                 <Field id={`${prefix}-url`} label="Final URL" error={shown('finalUrl')} hint={`Must start with ${URL_PREFIX}/`}>
                   {(p) => <input {...p} value={f.finalUrl} onChange={(e) => set('finalUrl', e.target.value)} onBlur={() => touch(['finalUrl'])} />}
                 </Field>
-                <div className="sim-field">
-                  <label htmlFor={`${prefix}-theme`}>Visual theme</label>
-                  <select id={`${prefix}-theme`} value={f.theme} onChange={(e) => set('theme', e.target.value as CreativeTheme)}>
-                    {THEME_OPTIONS.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </>
             )}
-          </fieldset>
+          </StepCard>
         )}
 
-        {step === 2 && (
-          <fieldset className="create-fieldset">
-            <legend>Review</legend>
-            <dl className="ai-rows">
-              <div><dt>Platform</dt><dd>{f.platform === 'meta' ? 'Meta Ads' : 'Google Ads'}</dd></div>
-              <div><dt>{f.platform === 'meta' ? 'Objective' : 'Channel'}</dt><dd>{objectiveLabel(f.objective)}</dd></div>
-              <div><dt>Campaign</dt><dd>{f.campaignName || '–'}</dd></div>
-              <div><dt>Daily budget</dt><dd>{money(parseBudgetMinor(f.budgetText))}</dd></div>
-              <div><dt>Ad</dt><dd>{f.includeAd ? f.adName || '–' : 'Not included'}</dd></div>
-              <div><dt>Status after creation</dt><dd><Badge tone="warn">PAUSED</Badge></dd></div>
-            </dl>
+        {current === 'extras' && (
+          <StepCard title="Extensions and assets" sub="Google Ads extras that would be attached to the ad.">
+            <StatList>
+              <StatRow label="Sitelinks" value="None (demo)" />
+              <StatRow label="Callouts" value="None (demo)" />
+              <StatRow label="Image assets" value={search ? 'Not used by Search' : 'Generated demo visual'} />
+            </StatList>
+            <p className="text-xs text-ink-3">These are not saved with the draft in the demo.</p>
+          </StepCard>
+        )}
+
+        {(current === 'review' || current === 'save') && (
+          <StepCard
+            title={current === 'review' ? 'Review' : 'Save draft (simulation)'}
+            sub={current === 'review' ? 'Check everything before saving or creating.' : 'Save the draft in this browser, or create the objects in the simulation. Everything is created PAUSED.'}
+          >
+            <StatList>
+              <StatRow label="Platform" value={f.platform === 'meta' ? 'Meta Ads' : 'Google Ads'} />
+              <StatRow label={f.platform === 'meta' ? 'Objective' : 'Channel'} value={objectiveLabel(f.objective)} />
+              <StatRow label="Campaign" value={f.campaignName || '–'} />
+              <StatRow label="Daily budget" value={money(parseBudgetMinor(f.budgetText))} />
+              <StatRow label="Ad" value={f.includeAd ? f.adName || '–' : 'Not included'} />
+              <StatRow label="Status after creation" value={<Badge tone="warn">PAUSED</Badge>} />
+            </StatList>
             {!allOk && (
-              <ul className="sim-issues" role="alert">
+              <ul className="m-0 rounded-lg bg-negative-soft py-2.5 pl-7 pr-3 text-sm text-negative" role="alert">
                 {Object.values(errors).map((m) => (
                   <li key={m}>{m}</li>
                 ))}
@@ -381,22 +461,22 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
             <Notice tone="info">New objects are always created PAUSED. Activating them is a separate confirmed action.</Notice>
             {!allowed && <Notice tone="warn">{VIEWER_TOOLTIP}.</Notice>}
             {result && !result.success && (
-              <ul className="sim-issues" role="alert">
+              <ul className="m-0 rounded-lg bg-negative-soft py-2.5 pl-7 pr-3 text-sm text-negative" role="alert">
                 {result.issues.map((m) => (
                   <li key={m}>{m}</li>
                 ))}
               </ul>
             )}
-          </fieldset>
+          </StepCard>
         )}
 
-        <div className="create-actions">
+        <div className="flex flex-wrap items-center gap-2">
           {step > 0 && (
             <Button variant="ghost" onClick={() => setStep((s) => Math.max(0, s - 1))}>
               Back
             </Button>
           )}
-          {step < 2 && (
+          {step < flow.length - 1 && (
             <Button variant="primary" onClick={next}>
               Next
             </Button>
@@ -404,7 +484,7 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
           <Button variant="secondary" onClick={save}>
             Save as draft
           </Button>
-          {step === 2 && (
+          {current === 'save' && (
             <span title={allowed ? undefined : VIEWER_TOOLTIP}>
               <Button variant="primary" disabled={!allowed || busy} onClick={() => void create()}>
                 Create (PAUSED)
@@ -413,16 +493,16 @@ export function DraftForm(props: { initial: FormState; onSaved?: (d: Draft) => v
           )}
         </div>
         {savedNote && (
-          <p className="sim-ok" role="status">
+          <p className="text-sm font-semibold text-positive" role="status">
             {savedNote}
           </p>
         )}
       </div>
 
-      <aside className="create-preview" aria-label="Live ad preview">
-        <h3>Live preview</h3>
+      <aside className="card grid gap-3 p-4 lg:sticky lg:top-3" aria-label="Live ad preview">
+        <h3 className="text-sm font-semibold text-ink">Live preview</h3>
         <AdPreview creative={previewCreative(f)} size="md" />
-        <p className="muted">Original demo creative, drawn in the browser. {f.platform === 'google' && f.objective === 'SEARCH' ? 'Search ads are text only.' : ''}</p>
+        <p className="text-xs text-ink-3">Original demo creative, drawn in the browser. {search ? 'Search ads are text only.' : ''}</p>
       </aside>
     </div>
   );

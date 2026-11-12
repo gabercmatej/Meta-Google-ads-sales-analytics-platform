@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, Card, Button, Badge, EmptyState, Segmented, SimulationNotice, type Tone } from '../components/ui';
-import { Notice } from '../components/Notes';
+import { PageTitle, Card, Button, Badge, EmptyState, Segmented, SimulationNotice, Notice, inputCls, type Tone } from '../components/ui';
+import { PeriodBar } from '../components/PeriodBar';
 import { PlatformBadge } from '../components/EntityBits';
 import { PrepareChange, useSim } from '../sim/SimProvider';
 import { buildRecommendations, PRIORITY_LABEL, REC_TYPES, REC_TYPE_LABEL, THRESHOLDS, type RecPriority, type RecType, type Recommendation } from '../ai/recommendations';
@@ -9,54 +9,60 @@ import { getDataset } from '../lib/data';
 import { useAppState, PLATFORM_LABELS } from '../state/AppState';
 import { dateRange } from '../lib/format';
 import { MAX_BUDGET_CHANGE_PERCENT } from '../sim/changeFlow';
-import './sim-pages.css';
 
 const PRIORITY_TONE: Record<RecPriority, Tone> = { high: 'bad', medium: 'warn', low: 'neutral' };
+const PRIORITY_BAR: Record<RecPriority, string> = { high: 'border-l-negative', medium: 'border-l-amber-500', low: 'border-l-slate-300' };
 type PriorityFilter = 'all' | RecPriority;
 type PlatformFilter = 'all' | 'meta' | 'google';
 
 function RecCard({ rec, comparisonLabel, onDismiss, onRestore, dismissed }: { rec: Recommendation; comparisonLabel: string; onDismiss: () => void; onRestore: () => void; dismissed: boolean }) {
   const ask = `/assistant?q=${encodeURIComponent(rec.ask)}`;
   return (
-    <article className={`rec-card rec-${rec.priority}`} data-dismissed={dismissed ? 'true' : undefined} aria-label={rec.title}>
-      <header className="rec-head">
+    <article className={`card border-l-4 ${PRIORITY_BAR[rec.priority]} flex min-w-0 flex-col p-4 sm:p-5 ${dismissed ? 'opacity-70' : ''}`} data-dismissed={dismissed ? 'true' : undefined} aria-label={rec.title}>
+      <header className="flex flex-wrap items-center gap-1.5">
         <Badge tone={PRIORITY_TONE[rec.priority]}>{PRIORITY_LABEL[rec.priority]} priority</Badge>
         <Badge tone="info">{REC_TYPE_LABEL[rec.type]}</Badge>
         <PlatformBadge platform={rec.platform} />
+        <span className="ml-auto" title="Rule-based; evidence below is what the rule used">
+          <Badge tone="neutral">Rule-based</Badge>
+        </span>
       </header>
-      <h3 className="rec-title">{rec.title}</h3>
-      <p className="rec-entity">
+      <h3 className="mt-3 text-[15px] font-semibold leading-snug tracking-tight text-ink">{rec.title}</h3>
+      <p className="mt-1 text-xs text-ink-3">
         {rec.level === 'ad' ? 'Ad' : 'Campaign'}:{' '}
-        <Link to={rec.openTo} className="ai-link">
+        <Link to={rec.openTo} className="font-semibold text-brand hover:underline">
           {rec.entityName}
         </Link>
       </p>
-      <table className="rec-evidence">
-        <thead>
-          <tr>
-            <th scope="col">Evidence</th>
-            <th scope="col">Current</th>
-            <th scope="col">Previous</th>
-            <th scope="col">Change</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rec.evidence.map((e) => (
-            <tr key={e.label}>
-              <th scope="row">{e.label}</th>
-              <td>{e.current}</td>
-              <td>{e.previous}</td>
-              <td>{e.change}</td>
+      <div className="mt-3 overflow-x-auto rounded-lg border border-line">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50 text-left text-2xs uppercase tracking-wide text-ink-3">
+              <th scope="col" className="px-3 py-1.5 font-semibold">Evidence</th>
+              <th scope="col" className="px-2 py-1.5 text-right font-semibold">Current</th>
+              <th scope="col" className="px-2 py-1.5 text-right font-semibold">Previous</th>
+              <th scope="col" className="px-3 py-1.5 text-right font-semibold">Change</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="rec-compared muted">Compared: {comparisonLabel}</p>
-      <p>{rec.explanation}</p>
-      <p>
-        <strong>Next step:</strong> {rec.nextStep}
-      </p>
-      <footer className="rec-actions">
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rec.evidence.map((e) => (
+              <tr key={e.label}>
+                <th scope="row" className="px-3 py-1.5 text-left font-medium text-ink-2">{e.label}</th>
+                <td className="tabular px-2 py-1.5 text-right">{e.current}</td>
+                <td className="tabular px-2 py-1.5 text-right">{e.previous}</td>
+                <td className="tabular px-3 py-1.5 text-right font-semibold">{e.change}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1.5 text-2xs text-ink-3">Compared: {comparisonLabel}</p>
+      <p className="mt-2 text-sm leading-snug text-ink-2">{rec.explanation}</p>
+      <div className="mt-3 rounded-lg bg-brand-soft/70 px-3 py-2 text-sm leading-snug text-blue-950">
+        <strong className="font-semibold">Suggested next step:</strong> {rec.nextStep}
+      </div>
+      <footer className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+        {rec.prepare && <PrepareChange entity={rec.prepare.entity} kind={rec.prepare.kind} newDailyBudgetMinor={rec.prepare.newDailyBudgetMinor} label="Prepare change" />}
         <Link className="btn btn-secondary btn-sm" to={ask}>
           Ask assistant
         </Link>
@@ -68,16 +74,17 @@ function RecCard({ rec, comparisonLabel, onDismiss, onRestore, dismissed }: { re
             Compare ads
           </Link>
         )}
-        {rec.prepare && <PrepareChange entity={rec.prepare.entity} kind={rec.prepare.kind} newDailyBudgetMinor={rec.prepare.newDailyBudgetMinor} label="Prepare change" />}
-        {dismissed ? (
-          <Button size="sm" variant="ghost" onClick={onRestore}>
-            Restore
-          </Button>
-        ) : (
-          <Button size="sm" variant="ghost" onClick={onDismiss}>
-            Dismiss
-          </Button>
-        )}
+        <span className="ml-auto">
+          {dismissed ? (
+            <Button size="sm" variant="ghost" onClick={onRestore}>
+              Restore
+            </Button>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={onDismiss}>
+              Dismiss
+            </Button>
+          )}
+        </span>
       </footer>
     </article>
   );
@@ -104,12 +111,13 @@ export default function RecommendationsPage() {
   const hiddenTotal = (set?.items ?? []).filter((r) => dismissed.has(r.key)).length;
 
   return (
-    <div className="rec-page">
-      <PageHeader
+    <div className="space-y-5">
+      <PageTitle
         title="Recommendations"
-        description="Rule-based suggestions for the selected period compared with the previous period of the same length. Nothing here changes anything by itself."
+        sub="Rule-based suggestions for the selected period compared with the previous period of the same length. Nothing here changes anything by itself."
         badge={<Badge tone="warn">Simulated</Badge>}
       />
+      <PeriodBar />
       <SimulationNotice />
       {!set || !app.range ? (
         <EmptyState title="No completed days in this period">Choose another period to see recommendations.</EmptyState>
@@ -117,14 +125,14 @@ export default function RecommendationsPage() {
         <>
           <Notice tone="info">
             {PLATFORM_LABELS[app.platform]}: {dateRange(set.current)}
-            {set.previous ? ` compared with ${dateRange(set.previous)}` : ''}. {set.comparisonLabel}
+            {set.previous ? ` compared with ${dateRange(set.previous)}.` : `. ${set.comparisonLabel}`}
           </Notice>
           {!set.previous && <Notice tone="warn">The previous period would start before the available history, so change-based rules cannot run for this selection.</Notice>}
 
-          <div className="rec-filters" role="group" aria-label="Filters">
-            <label>
+          <div className="card flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 text-xs font-medium text-ink-3" role="group" aria-label="Filters">
+            <label className="flex items-center gap-2">
               Priority
-              <select value={priority} onChange={(e) => setPriority(e.target.value as PriorityFilter)}>
+              <select className={inputCls} value={priority} onChange={(e) => setPriority(e.target.value as PriorityFilter)}>
                 <option value="all">All priorities</option>
                 {(['high', 'medium', 'low'] as const).map((p) => (
                   <option key={p} value={p}>
@@ -133,9 +141,9 @@ export default function RecommendationsPage() {
                 ))}
               </select>
             </label>
-            <label>
+            <label className="flex items-center gap-2">
               Type
-              <select value={type} onChange={(e) => setType(e.target.value as 'all' | RecType)}>
+              <select className={inputCls} value={type} onChange={(e) => setType(e.target.value as 'all' | RecType)}>
                 <option value="all">All types</option>
                 {REC_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -154,7 +162,7 @@ export default function RecommendationsPage() {
                 { value: 'google', label: 'Google' },
               ]}
             />
-            <span className="muted">
+            <span className="text-ink-3">
               {open.length} shown{hiddenTotal > 0 ? `, ${hiddenTotal} dismissed` : ''}
             </span>
             {hiddenTotal > 0 && (
@@ -174,7 +182,7 @@ export default function RecommendationsPage() {
               {set.items.length === 0 ? 'No rule triggered for this period. That is a valid result, not a data gap.' : 'Adjust the filters or restore dismissed items.'}
             </EmptyState>
           ) : (
-            <div className="rec-grid">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {open.map((r) => (
                 <RecCard key={r.key} rec={r} comparisonLabel={set.comparisonLabel} dismissed={false} onDismiss={() => sim.dismiss(r.key)} onRestore={() => sim.restore(r.key)} />
               ))}
@@ -183,7 +191,7 @@ export default function RecommendationsPage() {
 
           {showDismissed && hidden.length > 0 && (
             <Card title="Dismissed">
-              <div className="rec-grid">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {hidden.map((r) => (
                   <RecCard key={r.key} rec={r} comparisonLabel={set.comparisonLabel} dismissed onDismiss={() => sim.dismiss(r.key)} onRestore={() => sim.restore(r.key)} />
                 ))}
@@ -192,7 +200,7 @@ export default function RecommendationsPage() {
           )}
 
           <Card title="How the rules work">
-            <ul className="rec-rules">
+            <ul className="list-disc space-y-1.5 px-9 py-4 text-sm text-ink-2 marker:text-slate-400">
               <li>Rising CPL: campaign CPL up at least {Math.round(THRESHOLDS.cplRise * 100)}% with enough leads in both periods.</li>
               <li>Falling CTR: ad CTR down at least {Math.round(THRESHOLDS.ctrFall * 100)}% with enough impressions in both periods.</li>
               <li>Creative fatigue: an ad whose CTR keeps falling while frequency or spend stays high.</li>

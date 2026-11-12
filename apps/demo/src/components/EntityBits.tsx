@@ -1,5 +1,5 @@
 import type { EntityPerformanceRow, Platform, ShowcaseEntityStatus } from '@sedem-ads/analytics-core';
-import { Badge } from './ui';
+import { Badge, StatusPill } from './ui';
 import { change } from '../lib/format';
 
 export function PlatformBadge({ platform }: { platform: Platform }) {
@@ -7,7 +7,7 @@ export function PlatformBadge({ platform }: { platform: Platform }) {
 }
 
 export function StatusBadge({ status }: { status: ShowcaseEntityStatus }) {
-  return <Badge tone={status === 'ACTIVE' ? 'good' : 'neutral'}>{status === 'ACTIVE' ? 'Active' : 'Paused'}</Badge>;
+  return <StatusPill status={status} />;
 }
 
 /** Strong / weak performance hint and creative-fatigue hint. */
@@ -25,7 +25,7 @@ export function HintBadges({ row }: { row: Pick<EntityPerformanceRow, 'tier' | '
 export function ChangeText({ value, lowerIsBetter }: { value: number | null; lowerIsBetter?: boolean }) {
   if (value === null) return <span className="no-data" title="No previous-period data to compare">–</span>;
   const good = value === 0 ? null : lowerIsBetter ? value < 0 : value > 0;
-  return <span className={good === null ? '' : good ? 'pos' : 'neg'}>{change(value)}</span>;
+  return <span className={good === null ? 'text-ink-3' : good ? 'font-semibold text-positive' : 'font-semibold text-negative'}>{change(value)}</span>;
 }
 
 export const OBJECTIVE_LABEL: Record<string, string> = { LEADS: 'Leads', TRAFFIC: 'Traffic', SALES: 'Sales', AWARENESS: 'Awareness' };

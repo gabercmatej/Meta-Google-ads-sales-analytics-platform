@@ -17,6 +17,7 @@ function mount(path: string) {
           { path: 'overview', element: <p>overview body</p> },
           { path: 'assistant', element: <p>assistant body</p> },
           { path: 'sales', element: <p>sales body</p> },
+          { path: 'combined', element: <p>combined body</p> },
         ],
       },
     ],
@@ -32,40 +33,40 @@ function mount(path: string) {
   return router;
 }
 
+const sw = () => within(screen.getByRole('navigation', { name: 'Platform' }));
+
 describe('app shell', () => {
-  it('renders grouped navigation and the DEMO DATA banner', () => {
+  it('renders grouped navigation and the DEMO banner', () => {
     mount('/overview');
-    const nav = screen.getByRole('navigation', { name: 'Main' });
-    for (const label of ['Overview', 'Campaigns & Ads', 'Sales', 'Attribution']) {
+    const nav = screen.getAllByRole('navigation', { name: 'Meta Center' })[0]!;
+    for (const label of ['Overview', 'Campaigns & ads', 'Sales', 'Attribution', 'AI assistant', 'Data sources']) {
       expect(within(nav).getAllByText(label).length).toBeGreaterThan(0);
     }
-    expect(screen.getByRole('note').textContent).toContain('DEMO DATA');
+    expect(document.body.textContent).toContain('all data shown is synthetic');
   });
 
-  it('shows the Meta + Google pill on shared pages only', () => {
+  it('shows the fixed Meta + Google pill on shared pages only', () => {
     mount('/sales');
-    expect(screen.getByText('Meta + Google', { selector: '.pill-both' })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: /shared page/ })).toBeNull();
     cleanup();
     mount('/assistant');
-    expect(document.querySelector('.crumb .pill-both')).not.toBeNull();
+    expect(screen.getByRole('group', { name: /shared page/ })).toBeTruthy();
   });
 
-  it('platform and period selectors update the URL', async () => {
-    const router = mount('/overview');
-    fireEvent.click(screen.getByRole('button', { name: /Meta Ads/ }));
-    fireEvent.change(screen.getByLabelText('Period'), { target: { value: 'last90' } });
-    await Promise.resolve();
+  it('the platform switch updates the URL and keeps the section', () => {
+    const router = mount('/sales');
+    fireEvent.click(sw().getByRole('link', { name: /Meta Ads/ }));
     const q = new URLSearchParams(router.state.location.search);
+    expect(router.state.location.pathname).toBe('/sales');
     expect(q.get('platform')).toBe('meta');
-    expect(q.get('period')).toBe('last90');
     expect(q.get('view')).toBe('daily');
-    expect(screen.getByRole('button', { name: /Meta Ads/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(sw().getByRole('link', { name: /Meta Ads/ }).getAttribute('aria-current')).toBe('page');
   });
 
   it('keeps the latest selection when the platform changes twice', () => {
     const router = mount('/overview');
-    fireEvent.click(screen.getByRole('button', { name: /Google Ads/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Combined/ }));
-    expect(new URLSearchParams(router.state.location.search).get('platform')).toBe('combined');
+    fireEvent.click(sw().getByRole('link', { name: /Google Ads/ }));
+    fireEvent.click(sw().getByRole('link', { name: /Combined/ }));
+    expect(router.state.location.pathname).toBe('/combined');
   });
 });

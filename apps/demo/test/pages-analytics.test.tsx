@@ -44,7 +44,8 @@ describe('analytics pages with the simulated dataset', () => {
   it('Attribution flags the Google label without evidence', () => {
     window.history.replaceState({}, '', '/attribution?period=custom&from=2025-10-01&to=2026-11-10');
     mount('/attribution', <AttributionPage />, '/attribution');
-    expect(document.body.textContent).toContain('Google label without evidence');
+    expect(document.body.textContent).toContain('Google label, no evidence');
+    expect(document.body.textContent).toMatch(/order ORD-\d+ is labelled Google without evidence/);
     expect(document.body.textContent).toContain('Verified attribution');
     fireEvent.change(screen.getByLabelText('Attribution status'), { target: { value: 'conflict' } });
     expect(document.body.textContent).toContain('Evidence for both');

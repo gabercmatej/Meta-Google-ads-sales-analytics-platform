@@ -8,18 +8,18 @@ import {
   type EntityMetricName,
   type EntityPerformanceRow,
 } from '@sedem-ads/analytics-core';
-import { Badge, Button, EmptyState, PageHeader, Segmented, Value } from '../components/ui';
+import { Badge, Button, EmptyState, PageTitle, Segmented, Value, inputCls } from '../components/ui';
+import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
 import { TimeSeriesChart, type ChartRow, type ChartSeries } from '../components/charts/TimeSeriesChart';
 import { AD_COLORS, SHAPES } from '../components/charts/colors';
 import { AdPreview } from '../components/AdPreview';
 import { PlatformBadge, StatusBadge } from '../components/EntityBits';
-import { Notice } from '../components/Notes';
+import { Notice } from '../components/ui';
 import { METRIC_FORMAT } from '../components/OverviewCharts';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
 import { count, dateRange, money, pct } from '../lib/format';
-import './analytics.css';
 
 const MAX_ADS = 4;
 const MIN_ADS = 2;
@@ -42,16 +42,15 @@ const TABLE_METRICS: { key: EntityMetricName; label: string; fmt: (n: number) =>
   { key: 'conversionRate', label: 'Lead rate (leads per click)', fmt: (n) => pct(n) },
 ];
 
+/** Best three ads by CPL with enough volume, plus the planted fatigued ad when it belongs to this workspace. */
 function defaultSelection(rows: readonly EntityPerformanceRow[], fatiguedId: string): string[] {
-  const ids: string[] = [];
-  const enough = rows.filter((r) => (r.current.impressions ?? 0) >= DEFAULT_VOLUME_GUARD.minImpressions && (r.current.leads ?? 0) >= DEFAULT_VOLUME_GUARD.minLeads);
-  const bestOn = (platform: 'meta' | 'google') =>
-    enough
-      .filter((r) => r.platform === platform && r.current.cplMinor !== null)
-      .sort((a, b) => (a.current.cplMinor ?? 0) - (b.current.cplMinor ?? 0))[0];
+  const enough = rows
+    .filter((r) => (r.current.impressions ?? 0) >= DEFAULT_VOLUME_GUARD.minImpressions && (r.current.leads ?? 0) >= DEFAULT_VOLUME_GUARD.minLeads && r.current.cplMinor !== null)
+    .sort((a, b) => (a.current.cplMinor ?? 0) - (b.current.cplMinor ?? 0));
+  const ids = enough.slice(0, 2).map((r) => r.id);
   const fatigued = rows.find((r) => r.id === fatiguedId);
-  for (const r of [bestOn('meta'), bestOn('google'), fatigued]) if (r && !ids.includes(r.id)) ids.push(r.id);
-  for (const r of rows) {
+  if (fatigued && !ids.includes(fatigued.id)) ids.push(fatigued.id);
+  for (const r of [...enough, ...rows]) {
     if (ids.length >= 3) break;
     if (!ids.includes(r.id)) ids.push(r.id);
   }
@@ -59,14 +58,14 @@ function defaultSelection(rows: readonly EntityPerformanceRow[], fatiguedId: str
 }
 
 export default function ComparisonPage() {
-  const { range, granularity } = useAppState();
+  const { range, granularity, workspace } = useAppState();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [pf, setPf] = useState<'all' | 'meta' | 'google'>('all');
   const [trend, setTrend] = useState<TrendMetric>('ctr');
   const ds = getDataset();
 
-  const rows = useMemo(() => (range ? entityPerformance(ds, { level: 'ad', view: 'combined', range }) : []), [ds, range]);
+  // A workspace only compares its own platform's ads; Meta and Google results are never mixed.
+  const rows = useMemo(() => (range ? entityPerformance(ds, { level: 'ad', view: 'combined', range }).filter((r) => r.platform === workspace) : []), [ds, range, workspace]);
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
   /** Ad names repeat across campaigns, so every label carries its campaign. */
   const campaignName = useMemo(() => new Map(ds.campaigns.map((c) => [c.id, c.name])), [ds]);
@@ -116,15 +115,16 @@ export default function ComparisonPage() {
 
   if (!range) {
     return (
-      <>
-        <PageHeader title="Ad Comparison" />
+      <div className="space-y-4">
+        <PageTitle title="Ad comparison" />
+        <PeriodBar />
         <EmptyState title="No completed days in this period" />
-      </>
+      </div>
     );
   }
 
   const q = search.trim().toLowerCase();
-  const candidates = rows.filter((r) => (pf === 'all' || r.platform === pf) && (!q || labelOf(r).toLowerCase().includes(q)));
+  const candidates = rows.filter((r) => (!q || labelOf(r).toLowerCase().includes(q)));
   const fmt = METRIC_FORMAT[trend];
   const series: ChartSeries[] = picked.map((r, i) => ({
     key: r.id,
@@ -135,110 +135,119 @@ export default function ComparisonPage() {
   }));
 
   return (
-    <div className="stack">
-      <PageHeader title="Ad Comparison" description={`Side by side for ${dateRange(range)}. Pick ${MIN_ADS} to ${MAX_ADS} ads.`} />
+    <div className="space-y-4">
+      <PageTitle title="Ad comparison" sub={`${workspace === 'meta' ? 'Meta Ads' : 'Google Ads'} ads side by side for ${dateRange(range)}. Pick ${MIN_ADS} to ${MAX_ADS} ads.`} />
+      <PeriodBar />
       {unknownRequested.length > 0 && <Notice tone="warn">Ignored unknown ad ids in the link: {unknownRequested.join(', ')}.</Notice>}
-      <Notice>
+      <Notice tone="blue">
         A "best" marker needs enough volume ({count(DEFAULT_VOLUME_GUARD.minImpressions)} impressions for CTR and CPM, {DEFAULT_VOLUME_GUARD.minClicks} clicks for CPC, {DEFAULT_VOLUME_GUARD.minLeads} leads for CPL).
         Ads below that are never called best, because small numbers are noisy.
       </Notice>
 
-      <section className="card" aria-label="Choose ads">
-        <h3 className="card-title">Choose ads ({selected.length} of {MAX_ADS})</h3>
-        <div className="chips">
+      <section className="card p-4" aria-label="Choose ads">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-ink">
+            Choose ads ({selected.length} of {MAX_ADS})
+          </h3>
+          {picked.length > 0 && (
+            <Button size="sm" onClick={() => setSelected([])}>
+              Clear
+            </Button>
+          )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
           {picked.map((r, i) => (
-            <span className="chip" key={r.id} style={{ borderColor: AD_COLORS[i % AD_COLORS.length] }}>
-              {labelOf(r)}
-              <button type="button" aria-label={`Remove ${labelOf(r)} from comparison`} onClick={() => toggle(r.id)}>×</button>
+            <span key={r.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full border-2 bg-white py-0.5 pl-3 pr-1.5 text-xs font-medium text-ink-2" style={{ borderColor: AD_COLORS[i % AD_COLORS.length] }}>
+              <span className="truncate">{labelOf(r)}</span>
+              <button type="button" className="rounded-full px-1.5 text-ink-3 hover:bg-slate-100 hover:text-ink" aria-label={`Remove ${labelOf(r)} from comparison`} onClick={() => toggle(r.id)}>
+                ×
+              </button>
             </span>
           ))}
-          {picked.length > 0 && <Button size="sm" onClick={() => setSelected([])}>Clear</Button>}
         </div>
-        <div className="filters">
-          <label className="field">
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-xs font-semibold text-ink-2">
             <span>Search ads</span>
-            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ad name" />
-          </label>
-          <label className="field">
-            <span>Platform</span>
-            <select value={pf} onChange={(e) => setPf(e.target.value as 'all' | 'meta' | 'google')}>
-              <option value="all">Meta + Google</option>
-              <option value="meta">Meta</option>
-              <option value="google">Google</option>
-            </select>
+            <input className={`${inputCls} w-56 max-w-full`} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ad name" />
           </label>
         </div>
-        <ul className="picker-list">
-          {candidates.length === 0 && <li className="card-sub">No ads match.</li>}
+        <ul className="mt-3 grid max-h-64 gap-0.5 overflow-y-auto rounded-lg border border-line p-1 sm:grid-cols-2">
+          {candidates.length === 0 && <li className="p-2 text-xs text-ink-3">No ads match.</li>}
           {candidates.slice(0, 60).map((r) => {
             const on = selected.includes(r.id);
-            const full = !on && selected.length >= MAX_ADS;
+            const isFull = !on && selected.length >= MAX_ADS;
             return (
               <li key={r.id}>
-                <label className="picker-item">
-                  <input type="checkbox" checked={on} disabled={full} onChange={() => toggle(r.id)} />
-                  <span>
-                    {r.name} <span className="card-sub">{campaignName.get(r.campaignId)}</span>
+                <label className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 ${isFull ? 'opacity-50' : ''}`}>
+                  <input type="checkbox" checked={on} disabled={isFull} onChange={() => toggle(r.id)} />
+                  <span className="min-w-0 flex-1 truncate">
+                    {r.name} <span className="text-2xs text-ink-3">{campaignName.get(r.campaignId)}</span>
                   </span>
                   <PlatformBadge platform={r.platform} />
-                  <span className="card-sub num">{money(r.current.spendMinor)}</span>
+                  <span className="tabular text-xs text-ink-3">{money(r.current.spendMinor)}</span>
                 </label>
               </li>
             );
           })}
         </ul>
-        {full(candidates.length) && <p className="card-sub">Showing the first 60 matches. Use search to narrow.</p>}
+        {candidates.length > 60 && <p className="mt-2 text-xs text-ink-3">Showing the first 60 matches. Use search to narrow.</p>}
       </section>
 
       {picked.length < MIN_ADS || !comparison ? (
         <EmptyState title="Select at least two ads to compare" />
       ) : (
         <>
-          <div className="cmp-grid">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {picked.map((r, i) => {
               const creative = ds.creatives.find((c) => c.id === r.creativeId);
               const m = comparison.table[r.id];
               return (
-                <article className="card cmp-card" key={r.id} aria-label={labelOf(r)}>
-                  <div>
-                    <h4><span className="swatch" style={{ background: AD_COLORS[i % AD_COLORS.length] }} aria-hidden="true" />{r.name}</h4>
-                    <div className="card-sub">{campaignName.get(r.campaignId)}</div>
-                    <div className="name-cell"><small><PlatformBadge platform={r.platform} /> <StatusBadge status={r.status} /> {r.fatigued && <Badge tone="warn">Creative fatigue</Badge>}</small></div>
+                <article className="card cmp-card flex flex-col gap-3 p-4" key={r.id} aria-label={labelOf(r)}>
+                  <div className="min-w-0">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: AD_COLORS[i % AD_COLORS.length] }} aria-hidden="true" />
+                      <span className="truncate">{r.name}</span>
+                    </h4>
+                    <div className="truncate text-xs text-ink-3">{campaignName.get(r.campaignId)}</div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <PlatformBadge platform={r.platform} /> <StatusBadge status={r.status} /> {r.fatigued && <Badge tone="warn">Creative fatigue</Badge>}
+                    </div>
                   </div>
                   {creative ? <AdPreview creative={creative} size="sm" /> : <EmptyState title="No creative" />}
-                  <dl className="metric-grid">
-                    <dt>Spend</dt><dd><Value text={money(r.current.spendMinor)} /></dd>
-                    <dt>Impressions</dt><dd><Value text={count(r.current.impressions)} /></dd>
-                    <dt>Clicks</dt><dd><Value text={count(r.current.clicks)} /></dd>
-                    <dt>Leads</dt><dd><Value text={count(r.current.leads)} /></dd>
+                  <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 text-sm">
+                    <MetricRow label="Spend" text={money(r.current.spendMinor)} />
+                    <MetricRow label="Impressions" text={count(r.current.impressions)} />
+                    <MetricRow label="Clicks" text={count(r.current.clicks)} />
+                    <MetricRow label="Leads" text={count(r.current.leads)} />
                     {TABLE_METRICS.map((t) => {
                       const v = m?.[t.key] ?? null;
                       const best = comparison.best[t.key];
                       const isBest = (best.status === 'winner' && best.entityId === r.id) || (best.status === 'tie' && best.entityIds.includes(r.id));
-                      return [
-                        <dt key={`${t.key}-l`}>{t.label}</dt>,
-                        <dd key={`${t.key}-v`} className={isBest ? 'best' : undefined}>
-                          <Value text={v === null ? '–' : t.fmt(v)} />
-                          {isBest && <> <Badge tone="good" title="Best of the selected ads with enough volume">Best{best.status === 'tie' ? ' (tie)' : ''}</Badge></>}
-                        </dd>,
-                      ];
+                      return (
+                        <MetricRow
+                          key={t.key}
+                          label={t.label}
+                          text={v === null ? '–' : t.fmt(v)}
+                          best={isBest ? <Badge tone="good" title="Best of the selected ads with enough volume">Best{best.status === 'tie' ? ' (tie)' : ''}</Badge> : null}
+                        />
+                      );
                     })}
                   </dl>
                 </article>
               );
             })}
           </div>
-          <ul className="notice-list">
+          <ul className="grid gap-1 pl-1 text-xs text-ink-3">
             {TABLE_METRICS.map((t) => {
               const b = comparison.best[t.key];
               if (b.status !== 'insufficient_data') return null;
-              return <li key={t.key} className="card-sub">{t.label}: no best ad. {b.reason}.</li>;
+              return <li key={t.key}>{t.label}: no best ad. {b.reason}.</li>;
             })}
           </ul>
 
           <ChartCard
             title={`${fmt.label} trend`}
-            subtitle={<Segmented<TrendMetric> label="Trend metric" value={trend} options={TREND} onChange={setTrend} />}
+            subtitle={<Segmented<TrendMetric> label="Trend metric" size="sm" value={trend} options={TREND} onChange={setTrend} />}
             render={(r) => (
               <TimeSeriesChart data={chartData} series={series} yFormat={fmt.axis} height={r.height} fixedWidth={r.fixedWidth} ariaLabel={`${fmt.label} of selected ads`} />
             )}
@@ -249,6 +258,14 @@ export default function ComparisonPage() {
   );
 }
 
-function full(n: number): boolean {
-  return n > 60;
+function MetricRow(props: { label: string; text: string; best?: React.ReactNode }) {
+  return (
+    <>
+      <dt className="text-xs text-ink-3">{props.label}</dt>
+      <dd className={`m-0 text-right font-semibold tabular ${props.best ? 'text-positive' : 'text-ink'}`}>
+        <Value text={props.text} />
+        {props.best && <> {props.best}</>}
+      </dd>
+    </>
+  );
 }

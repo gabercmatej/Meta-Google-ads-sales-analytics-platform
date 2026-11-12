@@ -46,7 +46,7 @@ describe('LeadsPage', () => {
     // A single day with a Google source gap: 2026-10-03 has no Google spend.
     mount('/leads?period=custom&from=2026-10-03&to=2026-10-03&platform=google');
     const text = document.body.textContent ?? '';
-    expect(text).toContain('Google cost per lead');
-    expect(text).not.toContain('Google cost per lead€0');
+    expect(text).toContain('Google Ads cost per lead');
+    expect(text).not.toContain('Google Ads cost per lead€0');
   });
 });

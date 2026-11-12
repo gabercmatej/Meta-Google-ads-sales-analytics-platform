@@ -1,27 +1,26 @@
 import { Link } from 'react-router-dom';
-import { PageHeader, Badge, Card } from '../components/ui';
+import { Badge, PageTitle } from '../components/ui';
 import { DraftForm, emptyForm } from '../sim/DraftForm';
 import { useSim } from '../sim/simContext';
 import { ROLE_LABEL } from '../sim/changeFlow';
-import './sim-pages.css';
+import { useAppState } from '../state/AppState';
 
 export default function CreatePage() {
   const sim = useSim();
+  const { workspace } = useAppState();
   return (
-    <div className="create-page">
-      <PageHeader
+    <div className="space-y-4">
+      <PageTitle
         title="Create campaign"
-        description="A guided flow for a new campaign and a first ad. Everything is created PAUSED, and activation is a separate confirmed action."
         badge={<Badge tone="warn">Simulated</Badge>}
-        actions={
-          <Link className="btn btn-secondary" to="/drafts">
+        sub={`Guided ${workspace === 'meta' ? '6-step Meta' : '7-step Google'} flow. Everything is created PAUSED, and activation is a separate confirmed action. Acting as ${ROLE_LABEL[sim.role]}. Drafts stay in this browser.`}
+        right={
+          <Link className="btn btn-secondary btn-sm" to="/drafts">
             Drafts ({sim.drafts.length})
           </Link>
         }
       />
-      <Card subtitle={`Acting as ${ROLE_LABEL[sim.role]}. Drafts stay in this browser.`}>
-        <DraftForm initial={emptyForm()} idPrefix="create" />
-      </Card>
+      <DraftForm key={workspace} initial={emptyForm(workspace)} idPrefix="create" />
     </div>
   );
 }

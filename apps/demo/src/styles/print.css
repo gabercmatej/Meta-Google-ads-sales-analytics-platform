@@ -1,21 +1,20 @@
 /* Print: hide navigation chrome, keep the demo banner. While exporting one chart the page is
    replaced by the print sheet. All chart lines are solid and 2-3px; gaps stay gaps. */
+.print-sheet { display: none; }
+
 @media print {
   @page { margin: 12mm; }
   body { background: #fff !important; }
-  .sidebar, .topbar, .scrim, .no-print, .chart-tools, .dialog-backdrop, .nav-toggle { display: none !important; }
-  .app { display: block !important; }
-  .main { margin: 0 !important; }
-  .content { padding: 0 !important; max-width: none !important; }
-  .card { box-shadow: none !important; break-inside: avoid; border-color: #999 !important; }
+  aside, header, [data-print-hide], .no-print, [role="dialog"] { display: none !important; }
+  main { max-width: none !important; padding: 0 !important; }
+  .card { box-shadow: none !important; break-inside: avoid; border: 1px solid #999 !important; }
   .recharts-line-curve, .recharts-area-curve, .recharts-curve { stroke-dasharray: none !important; stroke-width: 2.5px !important; }
   .recharts-cartesian-grid line { stroke: #cfcfcf !important; stroke-dasharray: none !important; }
   .recharts-tooltip-wrapper { display: none !important; }
-  .chart-legend { font-size: 12px; color: #000; }
+  [data-print-legend] { font-size: 12px; color: #000; }
+  [data-print-legend] button { box-shadow: none; }
 
   body.printing-chart #root { display: none !important; }
   body.printing-chart .print-sheet { display: block !important; width: 100%; }
-  body.printing-chart .print-sheet svg { width: 100% !important; height: auto !important; }
-  body.printing-chart .print-sheet .chart-plot { height: auto !important; }
-  .print-sheet .demo-banner-print { display: block; }
+  body.printing-chart .print-sheet svg { max-width: 100% !important; height: auto !important; }
 }

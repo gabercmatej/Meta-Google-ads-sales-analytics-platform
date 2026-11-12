@@ -1,8 +1,8 @@
+import { useState } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { NO_DATA } from '../../lib/format';
 import type { MarkerShape } from './colors';
 import { SHAPES } from './colors';
-import './charts.css';
 
 export interface ChartSeries {
   key: string;
@@ -65,7 +65,7 @@ function Marker(props: { cx: number; cy: number; shape: MarkerShape; color: stri
 
 export function LegendGlyph(props: { shape: MarkerShape; color: string; kind?: 'line' | 'area' | 'bar'; hollow?: boolean }) {
   return (
-    <svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" className="legend-glyph">
+    <svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" className="shrink-0">
       {props.kind === 'bar' ? (
         <rect x="5" y="1" width="12" height="10" rx="1.5" fill={props.color} />
       ) : (
@@ -90,24 +90,24 @@ function ChartTooltip({ active, payload, series, yFormat, note }: TipProps) {
   const row = payload?.[0]?.payload;
   if (!active || !row) return null;
   return (
-    <div className="chart-tip" role="tooltip">
-      <div className="chart-tip-title">
+    <div className="min-w-[190px] max-w-[280px] rounded-xl bg-white px-3 py-2 text-xs shadow-[0_8px_24px_rgb(16_24_40/0.12),0_0_0_1px_rgb(16_24_40/0.06)]" role="tooltip">
+      <div className="mb-1 font-semibold text-ink">
         {row.label}
-        {row.incomplete && <span className="chart-tip-flag"> · incomplete</span>}
+        {row.incomplete && <span className="font-medium text-amber-700"> · incomplete</span>}
       </div>
       {series.map((s) => {
         const v = row[s.key];
         const ok = typeof v === 'number' && Number.isFinite(v);
         return (
-          <div className="chart-tip-row" key={s.key}>
-            <span className="chart-tip-swatch" style={{ background: s.color }} aria-hidden="true" />
-            <span className="chart-tip-name">{s.label}</span>
-            <span className={`chart-tip-val ${ok ? '' : 'muted'}`}>{ok ? (s.format ?? yFormat)(v) : `${NO_DATA} No data`}</span>
+          <div className="flex items-center gap-2 py-px" key={s.key}>
+            <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ background: s.color }} aria-hidden="true" />
+            <span className="flex-1 text-ink-2">{s.label}</span>
+            <span className={`tabular ${ok ? 'font-semibold text-ink' : 'text-ink-3'}`}>{ok ? (s.format ?? yFormat)(v) : `${NO_DATA} No data`}</span>
           </div>
         );
       })}
-      {row.incomplete && <div className="chart-tip-note">Incomplete: partial or missing days. Totals use only the days that have data.</div>}
-      {note && <div className="chart-tip-note">{note}</div>}
+      {row.incomplete && <div className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-snug text-ink-3">Incomplete: partial or missing days. Totals use only the days that have data.</div>}
+      {note && <div className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-snug text-ink-3">{note}</div>}
     </div>
   );
 }
@@ -130,7 +130,16 @@ function incompleteRuns(data: readonly ChartRow[]): Array<[string, string]> {
 }
 
 export function TimeSeriesChart(props: TimeSeriesChartProps) {
-  const { data, series, yFormat, height = 300 } = props;
+  const { data, yFormat, height = 300 } = props;
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (key: string) =>
+    setHidden((h) => {
+      const next = new Set(h);
+      if (next.has(key)) next.delete(key);
+      else if (next.size < props.series.length - 1) next.add(key);
+      return next;
+    });
+  const series = props.series.filter((s) => !hidden.has(s.key));
   const labelByKey = new Map(data.map((d) => [d.key, d.label]));
   const anyValue = data.some((d) => series.some((s) => hasValue(d, s.key)));
   const anyIncomplete = data.some((d) => d.incomplete);
@@ -141,7 +150,7 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
 
   if (!anyValue) {
     return (
-      <div className="chart-empty" style={{ height }} role="img" aria-label={`${props.ariaLabel}: no data for this period`}>
+      <div className="grid place-items-center rounded-lg border border-dashed border-line-strong bg-slate-50 text-sm text-ink-3" style={{ height }} role="img" aria-label={`${props.ariaLabel}: no data for this period`}>
         {NO_DATA} No data for this period
       </div>
     );
@@ -175,9 +184,9 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
         cursor={{ stroke: '#9ca3af', strokeWidth: 1 }}
         content={(p: unknown) => <ChartTooltip {...(p as Pick<TipProps, 'active' | 'payload'>)} series={series} yFormat={yFormat} note={props.tooltipNote} />}
       />
-      {series.map((s, i) => {
+      {series.map((s) => {
         const yAxisId = s.axis === 'right' ? 'right' : 'left';
-        const shape = s.shape ?? SHAPES[i % SHAPES.length]!;
+        const shape = s.shape ?? SHAPES[props.series.indexOf(s) % SHAPES.length]!;
         if (s.kind === 'bar') {
           return (
             <Bar key={s.key} dataKey={s.key} yAxisId={yAxisId} stackId={s.stackId} fill={s.color} isAnimationActive={false} maxBarSize={36} name={s.label}>
@@ -210,8 +219,8 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
   const fixed = props.fixedWidth ?? (canObserve ? undefined : 640);
 
   return (
-    <figure className="chart" aria-label={props.ariaLabel}>
-      <div className="chart-plot" style={{ height }} role="img" aria-label={`${props.ariaLabel}. ${data.length} points.`}>
+    <figure className="m-0 min-w-0" aria-label={props.ariaLabel}>
+      <div className="w-full min-w-0 [&_svg]:max-w-full" style={{ height }} role="img" aria-label={`${props.ariaLabel}. ${data.length} points.`}>
         {fixed ? (
           <ComposedChart {...(chart.props as object)} width={fixed} height={height} />
         ) : (
@@ -220,15 +229,28 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
           </ResponsiveContainer>
         )}
       </div>
-      <figcaption className="chart-legend">
-        {series.map((s, i) => (
-          <span className="chart-legend-item" key={s.key}>
-            <LegendGlyph shape={s.shape ?? SHAPES[i % SHAPES.length]!} color={s.color} kind={s.kind === 'bar' ? 'bar' : 'line'} />
-            {s.label}
-          </span>
-        ))}
+      <figcaption className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-ink-2" data-print-legend>
+        <ul className="flex flex-wrap gap-x-2 gap-y-1.5" aria-label="Legend">
+          {props.series.map((s, i) => {
+            const off = hidden.has(s.key);
+            return (
+              <li key={s.key}>
+                <button
+                  type="button"
+                  aria-pressed={!off}
+                  title={off ? `Show ${s.label}` : `Hide ${s.label}`}
+                  onClick={() => toggle(s.key)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-inset ring-line transition-colors hover:bg-slate-100"
+                >
+                  <LegendGlyph shape={s.shape ?? SHAPES[i % SHAPES.length]!} color={s.color} kind={s.kind === 'bar' ? 'bar' : 'line'} />
+                  <span className={off ? 'line-through opacity-60' : ''}>{s.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
         {(anyIncomplete || anyGap || props.legendNote) && (
-          <span className="chart-legend-note">
+          <span className="basis-full text-[11px] leading-snug text-ink-3">
             {anyIncomplete && 'Shaded area, hollow markers and lighter bars = incomplete period (partial or missing days). '}
             {anyGap && 'Gaps = no data (not zero). '}
             {props.legendNote}

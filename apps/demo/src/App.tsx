@@ -5,6 +5,8 @@ import { AppStateProvider } from './state/AppState';
 import { SimProvider } from './sim/SimProvider';
 
 const OverviewPage = lazy(() => import('./pages/OverviewPage'));
+const CombinedOverviewPage = lazy(() => import('./pages/CombinedOverviewPage'));
+const UsersPage = lazy(() => import('./pages/UsersPage'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
 const CreatePage = lazy(() => import('./pages/CreatePage'));
@@ -20,7 +22,7 @@ const ActivityPage = lazy(() => import('./pages/ActivityPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function page(el: React.ReactNode) {
-  return <Suspense fallback={<div className="page-loading">Loading…</div>}>{el}</Suspense>;
+  return <Suspense fallback={<div className="py-16 text-center text-sm text-ink-3">Loading…</div>}>{el}</Suspense>;
 }
 
 export const routeObjects = [
@@ -28,8 +30,9 @@ export const routeObjects = [
     path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/overview" replace /> },
+      { index: true, element: <Navigate to="/combined" replace /> },
       { path: 'overview', element: page(<OverviewPage />) },
+      { path: 'combined', element: page(<CombinedOverviewPage />) },
       { path: 'campaigns', element: page(<CampaignsPage />) },
       { path: 'campaigns/:campaignId', element: page(<CampaignDetailPage />) },
       { path: 'create', element: page(<CreatePage />) },
@@ -42,6 +45,7 @@ export const routeObjects = [
       { path: 'recommendations', element: page(<RecommendationsPage />) },
       { path: 'data-sources', element: page(<DataSourcesPage />) },
       { path: 'activity', element: page(<ActivityPage />) },
+      { path: 'users', element: page(<UsersPage />) },
       { path: '*', element: page(<NotFoundPage />) },
     ],
   },

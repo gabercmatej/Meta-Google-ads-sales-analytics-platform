@@ -19,20 +19,24 @@ const vercel = JSON.parse(readFileSync(join(ROOT, 'vercel.json'), 'utf8'));
 const SHOTS = process.env.SCREENSHOTS ? resolve(ROOT, process.env.SCREENSHOTS) : null;
 
 const PAGES = [
-  ['/overview', 'Overview'],
+  ['/combined', 'Combined'],
   ['/overview?platform=meta', 'Overview'],
   ['/overview?platform=google', 'Overview'],
-  ['/campaigns', 'Campaigns'],
-  ['/create', 'Create'],
+  ['/campaigns?platform=meta', 'Campaigns'],
+  ['/campaigns?platform=google', 'Campaigns'],
+  ['/campaigns/meta-c1?platform=meta', ''],
+  ['/create?platform=meta', 'Create'],
+  ['/create?platform=google', 'Create'],
   ['/drafts', 'Drafts'],
   ['/sales', 'Sales'],
   ['/leads', 'Leads'],
   ['/attribution', 'Attribution'],
-  ['/compare', 'Comparison'],
-  ['/assistant', 'Assistant'],
+  ['/compare', 'comparison'],
+  ['/assistant', 'assistant'],
   ['/recommendations', 'Recommendations'],
-  ['/data-sources', 'Data'],
-  ['/activity', 'Activity'],
+  ['/data-sources', 'Data sources'],
+  ['/activity', 'Change log'],
+  ['/users', 'Users'],
 ];
 
 const VIEWPORTS = [
@@ -114,7 +118,7 @@ async function sweep(browser, base) {
       await h1.waitFor({ timeout: 8000 }).catch(() => {});
       const title = (await h1.textContent().catch(() => '')) ?? '';
       check(title.toLowerCase().includes(heading.toLowerCase()), `${vp.name} ${path}: heading contains "${heading}" (got "${title}")`);
-      const banner = await page.getByText(/DEMO DATA/i).first().isVisible().catch(() => false);
+      const banner = await page.getByText(/all data shown is synthetic/i).first().isVisible().catch(() => false);
       check(banner, `${vp.name} ${path}: demo banner visible`);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       check(overflow <= 1, `${vp.name} ${path}: no horizontal overflow (${overflow}px)`);

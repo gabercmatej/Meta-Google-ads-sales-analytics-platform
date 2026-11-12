@@ -14,9 +14,13 @@ import {
 import { getDataset } from '../lib/data';
 
 export type Role = 'VIEWER' | 'EDITOR' | 'ADMIN';
+export type Workspace = 'meta' | 'google';
+
+/** Core presets plus two demo-level ones that resolve to fixed ranges of completed days. */
+export type DemoPreset = DatePreset | 'yesterday' | 'thisWeek';
 
 export interface PeriodState {
-  preset: DatePreset;
+  preset: DemoPreset;
   /** Only used when preset === 'custom'. */
   custom: DateRange | null;
 }
@@ -24,6 +28,8 @@ export interface PeriodState {
 export interface AppState {
   platform: PlatformView;
   setPlatform: (p: PlatformView) => void;
+  /** The Meta or Google workspace that platform-scoped pages show (never 'combined'; that is the /combined page). */
+  workspace: Workspace;
   period: PeriodState;
   setPeriod: (p: PeriodState) => void;
   /** Resolved inclusive range (completed days only), or null if empty. */
@@ -41,18 +47,33 @@ export const HISTORY_START: ISODate = SHOWCASE_HISTORY_START;
 export const LAST_COMPLETE_DAY: ISODate = addDays(SHOWCASE_REFERENCE_DATE, -1);
 
 const PLATFORMS: readonly PlatformView[] = ['combined', 'meta', 'google'];
-const PRESETS: readonly DatePreset[] = ['last7', 'last14', 'last30', 'last90', 'thisMonth', 'previousMonth', 'yearToDate', 'custom'];
+const PRESETS: readonly DemoPreset[] = ['yesterday', 'thisWeek', 'last7', 'last14', 'last30', 'last90', 'thisMonth', 'previousMonth', 'yearToDate', 'custom'];
 
 /** Optional deep-link query parameters: ?platform=meta&period=last90&from=2026-01-01&to=2026-03-31&view=monthly */
 function initialFromUrl(): { platform: PlatformView; period: PeriodState; granularity: Granularity } {
   const q = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
-  const platform = PLATFORMS.find((p) => p === q.get('platform')) ?? 'combined';
+  const platform = PLATFORMS.find((p) => p === q.get('platform')) ?? 'meta';
   const preset = PRESETS.find((p) => p === q.get('period')) ?? 'last30';
   const from = q.get('from');
   const to = q.get('to');
   const custom = preset === 'custom' && from && to && isValidISODate(from) && isValidISODate(to) && from <= to ? { start: from, end: to } : null;
   const granularity: Granularity = q.get('view') === 'monthly' ? 'monthly' : 'daily';
   return { platform, period: { preset: custom ? 'custom' : preset === 'custom' ? 'last30' : preset, custom }, granularity };
+}
+
+/** Monday of the reference week; the week runs to the last completed day. */
+function weekStart(day: ISODate): ISODate {
+  const dow = (new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7;
+  return addDays(day, -dow);
+}
+
+export function resolveDemoRange(period: PeriodState): DateRange | null {
+  if (period.preset === 'yesterday') return { start: LAST_COMPLETE_DAY, end: LAST_COMPLETE_DAY };
+  if (period.preset === 'thisWeek') {
+    const start = weekStart(SHOWCASE_REFERENCE_DATE);
+    return start <= LAST_COMPLETE_DAY ? { start, end: LAST_COMPLETE_DAY } : null;
+  }
+  return resolveShowcaseRange(getDataset(), period.preset, period.custom ?? undefined);
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
@@ -69,13 +90,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     else if (p.preset !== 'custom' && p.preset !== 'last90') setGranularity('daily');
   }, []);
 
-  const range = useMemo(() => resolveShowcaseRange(getDataset(), period.preset, period.custom ?? undefined), [period]);
+  const range = useMemo(() => resolveDemoRange(period), [period]);
 
   const value = useMemo<AppState>(
-    () => ({ platform, setPlatform, period, setPeriod, range, granularity, setGranularity, role, setRole }),
+    () => ({ platform, setPlatform, workspace: platform === 'google' ? 'google' : 'meta', period, setPeriod, range, granularity, setGranularity, role, setRole }),
     [platform, period, setPeriod, range, granularity, role],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function hasRole(role: Role, min: Role): boolean {
+  const rank: Record<Role, number> = { VIEWER: 0, EDITOR: 1, ADMIN: 2 };
+  return rank[role] >= rank[min];
 }
 
 export function useAppState(): AppState {
@@ -84,19 +110,34 @@ export function useAppState(): AppState {
   return v;
 }
 
-export const PRESET_LABELS: Record<DatePreset, string> = {
+export const PRESET_LABELS: Record<DemoPreset, string> = {
+  yesterday: 'Yesterday',
+  thisWeek: 'This week',
   last7: 'Last 7 days',
   last14: 'Last 14 days',
   last30: 'Last 30 days',
   last90: 'Last 90 days',
   thisMonth: 'This month',
   previousMonth: 'Previous month',
-  yearToDate: 'Year to date',
+  yearToDate: 'This year',
   custom: 'Custom',
 };
 
+/** Short labels for the period bar, in the order the product shows them. */
+export const PERIOD_BAR: readonly { key: DemoPreset; label: string }[] = [
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'last7', label: '7 days' },
+  { key: 'last14', label: '14 days' },
+  { key: 'last30', label: '30 days' },
+  { key: 'last90', label: '90 days' },
+  { key: 'thisWeek', label: 'This week' },
+  { key: 'thisMonth', label: 'This month' },
+  { key: 'previousMonth', label: 'Previous month' },
+  { key: 'yearToDate', label: 'This year' },
+];
+
 export const PLATFORM_LABELS: Record<PlatformView, string> = {
-  combined: 'Combined',
+  combined: 'Combined overview',
   meta: 'Meta Ads',
   google: 'Google Ads',
 };

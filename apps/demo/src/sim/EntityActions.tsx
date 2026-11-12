@@ -41,7 +41,7 @@ export function EntityActions(props: { entity: EntityRef; compact?: boolean }) {
   const hasBudget = entity.dailyBudgetMinor !== null;
   const toggle: Kind = entity.status === 'ACTIVE' ? 'pause' : 'resume';
   return (
-    <span className="entity-actions" data-compact={props.compact ? 'true' : undefined}>
+    <span className="inline-flex flex-wrap items-center gap-1" data-compact={props.compact ? 'true' : undefined}>
       <span title={tip}>
         <Button size={size} variant="secondary" disabled={!allowed} onClick={() => setKind(toggle)} aria-label={`${KIND_TITLE[toggle]} ${entity.name}`}>
           {KIND_TITLE[toggle]}
@@ -170,9 +170,9 @@ function ChangeDialog(props: { entity: EffectiveEntity; kind: Kind; initialBudge
     <Dialog open title={title} onClose={props.onClose} footer={footer}>
       <div className="sim-dialog">
         <SimulationNotice />
-        <p className="sim-dialog-meta">
+        <p className="flex flex-wrap items-center gap-2">
           <Badge tone={entity.platform}>{entity.platform === 'meta' ? 'Meta Ads' : 'Google Ads'}</Badge>{' '}
-          <span className="muted">{entity.level.replace('_', ' ')} · {entity.platform === 'meta' ? 'changes are applied in the simulation' : 'validate-only: nothing is applied'}</span>
+          <span className="sim-muted">{entity.level.replace('_', ' ')} · {entity.platform === 'meta' ? 'changes are applied in the simulation' : 'validate-only: nothing is applied'}</span>
         </p>
 
         <ol className="sim-steps" aria-label="Change workflow">
@@ -187,7 +187,7 @@ function ChangeDialog(props: { entity: EffectiveEntity; kind: Kind; initialBudge
           <div className="sim-field">
             <label htmlFor="sim-budget">New daily budget (EUR)</label>
             <input id="sim-budget" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} />
-            <span className="muted">
+            <span className="sim-muted">
               Current {eur(entity.dailyBudgetMinor)}. A single change may not exceed {MAX_BUDGET_CHANGE_PERCENT}% ({eur(lo)} – {eur(hi)}).
             </span>
           </div>
@@ -203,19 +203,19 @@ function ChangeDialog(props: { entity: EffectiveEntity; kind: Kind; initialBudge
                 <div className="sim-field">
                   <label htmlFor="sim-headline">Headline</label>
                   <input id="sim-headline" value={headline} onChange={(e) => setHeadline(e.target.value)} maxLength={80} />
-                  <span className="muted">{headline.length}/60</span>
+                  <span className="sim-muted">{headline.length}/60</span>
                 </div>
                 <div className="sim-field">
                   <label htmlFor="sim-primary">Primary text</label>
                   <textarea id="sim-primary" rows={3} value={primaryText} onChange={(e) => setPrimaryText(e.target.value)} />
-                  <span className="muted">{primaryText.length}/300</span>
+                  <span className="sim-muted">{primaryText.length}/300</span>
                 </div>
               </>
             )}
           </>
         )}
 
-        {phase === 'review' && !review && <p className="muted">Reading current state…</p>}
+        {phase === 'review' && !review && <p className="sim-muted">Reading current state…</p>}
         {phase === 'review' && review && (
           <>
             <table className="sim-diff">
@@ -255,7 +255,7 @@ function ChangeDialog(props: { entity: EffectiveEntity; kind: Kind; initialBudge
             <strong>{result.success ? result.message : `Not applied: ${result.message}`}</strong>
             {result.mode === 'applied' && result.success && result.readBack && <div>Read-back: {result.readBack}</div>}
             {result.mode === 'validated_only' && <div>Status and budget are unchanged.</div>}
-            <div className="muted">An entry was added to the Activity Log.</div>
+            <div className="sim-muted">An entry was added to the Activity Log.</div>
           </div>
         )}
       </div>

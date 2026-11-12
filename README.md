@@ -2,130 +2,209 @@
 
 # Meta & Google Ads Sales Analytics Platform
 
-*AI-powered advertising intelligence, campaign management and verified-sales analytics.*
+*One workspace for paid advertising: what we spend, what it brings in, and what to change next.*
 
-Every number traces to a source. Missing data is never zero. The AI can analyse and draft, never write.
+Meta Ads and Google Ads performance, verified sales and leads, a grounded AI assistant and human-confirmed campaign changes, all in one place. Every number traces to a source. Missing data is never zero. The AI can analyse and draft, but it can never write.
 
-**[▶ Try the Interactive Demo](https://meta-google-ads-sales-analytics-pla-two.vercel.app)**
+**[▶ Open the interactive demo](https://meta-google-ads-sales-analytics-pla-two.vercel.app)**
 
 <sub>Runs entirely in your browser on synthetic data. No sign-in, no tracking, no network calls.</sub>
 
-[Interactive demo](#interactive-demo) · [AI Assistant](#ai-assistant) · [Ad Comparison](#ad-comparison) · [Analytics and BI](#analytics-and-bi) · [Engineering](#engineering) · [Architecture](#architecture)
+[Demo](#interactive-demo) · [Combined overview](#combined-overview) · [Campaigns](#campaigns--ads) · [Create](#create-ad-or-campaign) · [AI assistant](#ai-assistant) · [Recommendations](#ai-recommendations) · [Comparison](#ad-comparison) · [Sales and attribution](#sales-leads-and-attribution) · [Data sources](#data-sources-and-change-log) · [Architecture](#architecture)
 
 </div>
 
-![Overview dashboard of the interactive demo: spend, leads, paid orders, revenue, attributable ROAS and advertising surplus for Meta and Google combined](assets/screenshots/overview.png)
+![Combined overview: Meta + Google spend, sales by source, attributable ROAS and advertising surplus with Daily/Monthly charts](assets/screenshots/combined.png)
 
-<sub>Screenshot of the interactive demo. **DEMO DATA — NOT REAL BUSINESS RESULTS.** Fictional company, synthetic deterministic dataset.</sub>
+<sub>Screenshot of the interactive demo. **DEMO DATA — NOT REAL BUSINESS RESULTS.** Campaign names, creatives, numbers and IDs are synthetic.</sub>
 
 ## What this repository is
 
-> A **case study** of a private production system used by one company, plus an **independent reference library** (`packages/analytics-core`) and an **interactive demo** (`apps/demo`) that re-implement its core rules on **synthetic data only**. It contains **no production source code, prompts, data or screenshots**. See [WHATS_PUBLIC.md](WHATS_PUBLIC.md) for exactly what is and is not here, and [NOTICE.md](NOTICE.md) for terms.
+> A **case study** of a private production system used by one company, plus an **interactive demo** (`apps/demo`) that reproduces the product's interface page for page in English, and an **independent reference library** (`packages/analytics-core`) that re-implements its core rules. Everything runs on **synthetic data only**. It contains **no production source code, prompts, data or production screenshots**. See [WHATS_PUBLIC.md](WHATS_PUBLIC.md) for exactly what is and is not here, and [NOTICE.md](NOTICE.md) for terms.
 
 | | Production system (private) | This repository (public) |
 |---|---|---|
+| **Interface** | Slovenian, inside the company's internal portal | Same layout, navigation and components, in English |
 | **Data** | Meta, Google Ads, sales backend, Excel, Stripe | Synthetic, deterministic, 12+ months to 11 Nov 2026 |
 | **AI** | Hosted model through read-only tools (not fine-tuned) | Deterministic intent router + the same kind of read-only tools, in the browser |
-| **Meta writes** | Live under scoped rules | Simulated in browser state only |
+| **Meta writes** | Live, human-confirmed, scoped to allowed accounts | Simulated in browser state only |
 | **Google writes** | Validate-only | Validate-only (simulated) |
-| **Tests** | 2,096 tests (private, not runnable here) | 217 library + 89 demo + 22 scanner tests, 161 browser checks |
+| **Sync** | Daily cron + manual refresh | Schedule shown, refresh simulated |
+| **Tests** | 2,096 tests (private, not runnable here) | 217 library + 95 demo + 22 scanner tests, 200 browser checks |
 
 ## Interactive demo
 
-A static single-page app with **no backend and no network calls** (`connect-src 'none'` in the Content Security Policy). Everything runs in your browser on a synthetic dataset; campaign changes live in local state and can be reset.
+A static single-page app with **no backend and no network calls** (`connect-src 'none'` in the Content Security Policy). Campaign changes live in local state; **Reset demo** on the Change log page restores the original data.
 
-| Area | Pages |
-|---|---|
-| Analytics | Overview (Combined, Meta, Google) · Sales · Leads · Attribution · Ad Comparison |
-| Campaigns | Campaigns & Ads · Create Ad / Campaign · Drafts |
-| AI | AI Assistant · AI Recommendations |
-| System | Data Sources · Activity Log |
+```mermaid
+flowchart LR
+  subgraph SHELL["Shared shell"]
+    direction TB
+    SW["Platform switch<br/>Meta Ads · Google Ads · Combined"]
+    PER["Period presets<br/>Yesterday … This year · Custom"]
+    GR["Daily / Monthly"]
+    ROLE["Role<br/>Viewer · Ad editor · Administrator"]
+  end
+  SHELL --> OV["Overview<br/>Combined · Meta · Google"]
+  SHELL --> ADV["Advertising<br/>Campaigns & ads · Create ad · Drafts"]
+  SHELL --> RES["Results<br/>Sales · Leads · Attribution · Ad comparison"]
+  SHELL --> AI["AI help<br/>AI assistant · Recommendations"]
+  SHELL --> SYS["System<br/>Data sources · Change log · Users"]
 
-A platform selector (Combined, Meta Ads, Google Ads), date presets (7, 14, 30, 90 days, this month, previous month, year to date, custom range) and a Daily/Monthly toggle apply across pages. Pages that cover both platforms carry a **Meta + Google** marker. Run it locally:
+  classDef shell fill:#eef4ff,stroke:#1f5fa8,color:#0b2545
+  classDef page fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  classDef ai fill:#ecfdf5,stroke:#059669,color:#064e3b
+  class SW,PER,GR,ROLE shell
+  class OV,ADV,RES,SYS page
+  class AI ai
+```
+
+The platform switch decides which workspace you are in. Meta Ads and Google Ads are separate workspaces with their own campaigns, charts and recommendations, and **Combined** puts both side by side. Platform, period and Daily/Monthly live in the URL, so every view can be linked. Pages that cover both platforms (Attribution, AI, System) carry a **Meta + Google** marker.
 
 ```bash
 npm ci
 npm run dev:demo      # http://localhost:5173
 ```
 
-## AI Assistant
+## Combined overview
 
-![AI Assistant answering which campaign had the best cost per lead last month, with summary, key numbers, evidence, recommendations, limits and a grounding badge](assets/screenshots/assistant.png)
+The first screen answers three questions: how much are we investing in advertising, how many sales can we link to it, and which platform earns more per euro spent.
 
-The demo assistant is labelled **"Demo AI Assistant — simulated, data-grounded analysis"**. It does not run a language model and it was not trained or fine-tuned on anything. It shows the *orchestration pattern* the production assistant uses: understand the question, call read-only analytics tools, record every result as a fact, write the answer only from those facts, and check that every number in the answer traces back to one.
+- **Total spend** uses one canonical path for the card, the chart, the monthly view and the PDF, and counts only completed days.
+- **Sales by source** gives each source its own colour and adds a **Meta + Google + Chatbot/AI** subtotal. Partner portal, Other verified, Unknown and Conflicting stay visible and still reconcile to the total.
+- **Advertising surplus** is selected-source revenue minus Meta and Google spend. It is marked *not profit* and has a month-over-month breakdown.
+- **Attributable ROAS** is shown per platform and combined, from verified evidence only, computed from sums and never averaged.
+- **Every chart** has a period total, Daily/Monthly, an expanded view, and print/PDF export with solid lines that stay distinguishable in greyscale.
 
-```mermaid
-flowchart LR
-  Q["Question"] --> R["Intent router<br/>22 topics + unsupported"]
-  R --> P["Period and platform<br/>from question or page filters"]
-  P --> T["Read-only analytics tools<br/>entityPerformance, salesOverview, …"]
-  T --> F["Fact book<br/>every number recorded"]
-  F --> A["Answer in five sections<br/>Summary · Key numbers · Evidence<br/>Recommendations · Limits"]
-  A --> G{"Grounding check<br/>every number in a fact?"}
-  G -- "yes" --> OK["Answer + badge<br/>'Grounded: n/n numbers verified'"]
-  G -- "no" --> X["Number flagged,<br/>never shown as verified"]
-  R -- "not supported" --> U["Honest limitation<br/>+ suggested alternatives"]
+<p>
+  <img src="assets/screenshots/overview.png" alt="Meta Ads overview: spend, platform leads, CPL, paid orders, revenue, attributable ROAS and advertising surplus with sparklines" width="49%">
+  <img src="assets/screenshots/overview-google.png" alt="Google Ads overview with the same layout for the Google workspace" width="49%">
+</p>
 
-  classDef io fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b
-  classDef tool fill:#f3f4f6,stroke:#6b7280,color:#111827
-  classDef ok fill:#ecfdf5,stroke:#059669,color:#064e3b
-  classDef warn fill:#fef3c7,stroke:#b45309,color:#451a03
-  class Q,A io
-  class R,P,T,F tool
-  class OK ok
-  class G,X,U warn
-```
+Each platform overview has the same advertising summary, linked-sales estimate, delivery block and trend charts. A partial period is flagged with the days that have data and the dates that are missing. Chart lines show a gap there instead of dropping to zero.
 
-- **Answers are evidence-first.** Each answer lists the period, platform, tool calls and entity IDs it used; "Show tool calls" opens the trace.
-- **22 supported topics**, including spend and leads, Meta vs Google, best and weakest campaign, why CPL changed, creative fatigue, top ads by CTR, budget reallocation (capped at 30 % per change), sales by source, attributable ROAS, advertising surplus, refunds, unknown-source orders, Google-labelled orders without evidence, data quality and month over month.
-- **It says what it cannot do.** Forecasts, competitor data, personal customer details and anything outside the dataset get a clear limitation plus questions it *can* answer.
-- **No write path.** The assistant can link to a campaign or open the confirmation workflow; it never changes anything itself.
+## Campaigns & ads
 
-**AI Recommendations** turn the same rules into cards. Each card shows the entity, an evidence table (current vs previous period), the comparison period, an explanation, a concrete next step, a priority, and links to the campaign, the ad comparison and the assistant.
+![Campaigns & ads: Meta campaigns with status, budget, spend share, leads, CPL change, CTR, CPC and Pause/Budget/Edit actions](assets/screenshots/campaigns.png)
 
-![AI Recommendations: prioritised cards with evidence tables, comparison period, explanation and next step](assets/screenshots/recommendations.png)
+Campaigns, ad sets and ads sit in one table, with search and quick filters. Columns are grouped into delivery, spend and results, engagement, and actions, and CPL change against the previous period is shown inline. Each campaign opens a detail page with KPI cards, a trend chart you can switch between metrics, and its settings as read from the (simulated) account.
 
-How the production assistant works (tools, fact ledger, repair round, fallback): [docs/ai-assistant-architecture.md](docs/ai-assistant-architecture.md).
-
-## Ad Comparison
-
-![Ad Comparison: three ads from Meta and Google side by side with previews, metrics and volume-guarded best markers](assets/screenshots/comparison.png)
-
-Pick two to four ads across Meta and Google and compare them over **the same period**: ad previews, spend, impressions, clicks, leads, CTR, CPC, CPM, CPL and lead rate, plus a trend chart per metric with Daily/Monthly views. Ratios are computed from sums, never averaged. A **Best** marker appears only with enough volume (1,000 impressions for CTR and CPM, 30 clicks for CPC, 5 leads for CPL), because small numbers are noisy. Selections live in the URL, so a comparison can be linked. Details: [docs/ad-comparison.md](docs/ad-comparison.md).
-
-## Simulated campaign management
+<p>
+  <img src="assets/screenshots/campaign-detail.png" alt="Campaign detail: KPI cards with change vs previous period, trend chart and campaign settings" width="49%">
+  <img src="assets/screenshots/campaigns-google.png" alt="Google Ads campaigns: the same table for the Google workspace with validate-only actions" width="49%">
+</p>
 
 > **Demo simulation — no real advertising account is affected.**
 
 | Action | Meta (demo) | Google (demo) |
 |---|---|---|
-| Pause / resume, budget, edit | Preview → validate → confirm → execute (simulated) → read back → audit log | Validate-only: checked, never applied |
+| Pause / resume, budget, edit | Preview → validate → confirm → execute (simulated) → read back → change log | Validate-only: checked, never applied |
 | Create campaign / ad | Created **PAUSED**; activation is a separate confirmation | Validate-only |
 | Drafts | Save, edit, validate | Save, edit, validate |
-| Roles | Viewer is read-only; Ad editor and Admin can act | Same |
+| Roles | Viewer is read-only; Ad editor and Administrator can act | Same |
 
-Budgets above the per-change cap are rejected, URLs must stay on the advertiser's domain, and every step is recorded in the Activity Log. **Reset demo** restores the original state.
+Budgets above the per-change cap are rejected, and final URLs must stay on the advertiser's domain.
 
-<p>
-  <img src="assets/screenshots/campaigns.png" alt="Campaigns and Ads table with status, budget and actions" width="49%">
-  <img src="assets/screenshots/create.png" alt="Create Ad or Campaign form with a live ad preview" width="49%">
-</p>
+## Create ad or campaign
 
-## Analytics and BI
+![Create campaign: guided Meta flow with a live ad preview](assets/screenshots/create.png)
 
-- **Spend, leads, paid orders and revenue** with change vs the previous equal-length period.
-- **Sales by source** with a distinct colour per source and a **Meta + Google + Chatbot/AI** subtotal; Partner portal, Other verified, Unknown and Conflicting are shown separately and still reconcile to the total.
-- **Attribution kept separate from customer source.** A customer labelled "Google" is not proof of a Google paid-ad sale; only verifiable evidence enters **attributable ROAS**, per platform and combined.
-- **Advertising surplus** (selected-source revenue − Meta and Google spend), clearly marked *not profit*.
-- **Incomplete periods** are flagged: a missing day is "no data", never zero, and chart lines show gaps instead of dropping to zero.
-- **Charts** have legends, tooltips, an expanded view and print/PDF export with solid, greyscale-distinguishable lines.
+Each platform has a guided step-by-step flow with character counters, URL rules and a live preview that redraws as you type. Everything is created **PAUSED**. Drafts stay in the browser and can be validated later on the Drafts page. Administrators also see a Users and roles page.
 
 <p>
-  <img src="assets/screenshots/sales.png" alt="Sales page with order status cards and sales by source chart" width="49%">
-  <img src="assets/screenshots/attribution.png" alt="Attribution page separating evidence levels from customer source" width="49%">
+  <img src="assets/screenshots/drafts.png" alt="Drafts page: saved local drafts with validation results" width="49%">
+  <img src="assets/screenshots/users.png" alt="Users and roles page visible to administrators" width="49%">
 </p>
 
-The funnel stays as separate stages and is never merged into one "result":
+## AI assistant
+
+![AI assistant answering which campaign had the best cost per lead last month: grounding badge, key numbers, what I would do, evidence and limits](assets/screenshots/assistant.png)
+
+The demo assistant is labelled **"Demo AI Assistant — simulated, data-grounded analysis"**. It does not run a language model and it was not trained or fine-tuned on anything. It shows the *orchestration pattern* the production assistant uses:
+
+1. Understand the question.
+2. Call read-only analytics tools.
+3. Record every result as a fact.
+4. Write the answer only from those facts.
+5. Check that every number in the answer traces back to one.
+
+```mermaid
+flowchart LR
+  Q(["Question"]) --> R["Intent router<br/>22 topics + unsupported"]
+  R --> P["Period and platform<br/>from the question or page filters"]
+  P --> T["Read-only analytics tools"]
+  T --> F[("Fact book<br/>every number recorded")]
+  F --> A["Answer<br/>Key numbers · What I would do<br/>Why — evidence · Limits"]
+  A --> G{"Every number<br/>in a fact?"}
+  G -- "yes" --> OK(["Badge: Grounded n/n<br/>numbers verified"])
+  G -- "no" --> X(["Number flagged,<br/>never shown as verified"])
+  R -- "not supported" --> U(["Honest limitation<br/>+ suggested alternatives"])
+  A -. "link or prepare change<br/>(no write path)" .-> H["Human confirms<br/>in Campaigns"]
+
+  classDef io fill:#eef4ff,stroke:#1f5fa8,color:#0b2545
+  classDef tool fill:#f3f4f6,stroke:#6b7280,color:#111827
+  classDef ok fill:#ecfdf5,stroke:#059669,color:#064e3b
+  classDef warn fill:#fef3c7,stroke:#b45309,color:#451a03
+  class Q,A,H io
+  class R,P,T,F tool
+  class OK ok
+  class G,X,U warn
+```
+
+- **Evidence first.** Each answer lists the period, platform, tools and entities it used. **Show tool calls** opens the full trace.
+- **22 supported topics**, including:
+  - spend and leads, and Meta vs Google
+  - best and weakest campaign, and why CPL changed
+  - creative fatigue and top ads by CTR
+  - budget reallocation, capped at 30 % per change
+  - sales by source, attributable ROAS and advertising surplus
+  - refunds, unknown-source orders, and Google-labelled orders without evidence
+  - data quality, and month over month
+- **It says what it cannot do.** Forecasts, competitor data, personal customer details and anything outside the dataset get a stated limitation plus questions it *can* answer.
+- **No write path.** It can link to a campaign or open the confirmation workflow, but it never changes anything itself.
+
+How the production assistant works (tools, fact ledger, repair round, fallback): [docs/ai-assistant-architecture.md](docs/ai-assistant-architecture.md).
+
+## AI recommendations
+
+![Recommendations: prioritised cards with evidence tables, comparison period, explanation and suggested next step](assets/screenshots/recommendations.png)
+
+Recommendations are rule-based cards that compare the selected period with the previous period of the same length. You can filter them by priority, type and platform. Each card shows:
+
+- the entity it concerns
+- an evidence table: current, previous, change
+- an explanation
+- a concrete next step
+- links to the campaign, the ad comparison and the assistant
+
+**Prepare change** opens the same confirmation workflow as the Campaigns page. Nothing happens until a person confirms it.
+
+## Ad comparison
+
+![Ad comparison: Meta ads side by side with previews, metrics and volume-guarded Best markers](assets/screenshots/comparison.png)
+
+Pick two to four ads from the same platform and compare them over **the same period**:
+
+- **Shown per ad:** ad previews, spend, impressions, clicks, leads, CTR, CPC, CPM, CPL and lead rate, plus a trend chart per metric.
+- **Ratios** are computed from sums.
+- **A Best marker** appears only with enough volume: 1,000 impressions for CTR and CPM, 30 clicks for CPC, 5 leads for CPL.
+- **Selections** live in the URL.
+
+Details: [docs/ad-comparison.md](docs/ad-comparison.md).
+
+## Sales, leads and attribution
+
+<p>
+  <img src="assets/screenshots/sales.png" alt="Sales: paid, unpaid, cancelled and refunded orders, revenue and sales by source" width="49%">
+  <img src="assets/screenshots/attribution.png" alt="Attribution: verified Meta and Google revenue and ROAS per platform, evidence kept separate from customer source" width="49%">
+</p>
+<p>
+  <img src="assets/screenshots/leads.png" alt="Leads: platform leads, CPL and lead trends per campaign" width="49%">
+</p>
+
+- **Sales** can be counted by payment date or by order date. VAT is shown and net revenue is derived from it. Unpaid orders are counted but are not revenue.
+- **Attribution is kept separate from customer source.** A customer labelled "Google" is not proof of a Google paid-ad sale. Only a matching lead ID or a stored click ID (fbclid for Meta, gclid for Google) counts towards **attributable ROAS**. Dates, amounts and names are never used to guess a link.
+- **The funnel stays in stages** and is never merged into one "result":
 
 | Stage | Source | What it is not |
 |---|---|---|
@@ -138,22 +217,48 @@ The funnel stays as separate stages and is never merged into one "result":
 
 Details: [docs/attribution-and-sales.md](docs/attribution-and-sales.md), [docs/data-accuracy.md](docs/data-accuracy.md).
 
-## Engineering
-
-- **One canonical number per metric.** Card, chart, monthly view and PDF read the same path; integrity tests check that daily sums equal monthly totals, Combined = Meta + Google, and source partitions reconcile.
-- **Missing is not zero.** Coverage comes from successful syncs; an API error is never zero spend.
-- **Deterministic synthetic data** with seasonality, a planted missing day, refunds, cancellations, unknown and conflicting sources, and no duplicate orders, all asserted by tests.
-- **Grounded answers.** A fact book records every tool result; a checker rejects any number it cannot trace.
-- **Writes that expect to be wrong** (production): preview read from the platform, hash-bound confirmation, stale detection, one write, read-back, audit, new objects paused.
-- **Locked-down static demo.** Strict CSP with no outbound connections, no secrets, browser tests that fail on any external request, console error, CSP violation or horizontal overflow on desktop and phone.
-- **Privacy scanning** of the tree and the full git history, plus gitleaks, in CI.
-
-Twelve production problems with decision, implementation, verified result and trade-off: [docs/engineering-challenges.md](docs/engineering-challenges.md).
+## Data sources and change log
 
 <p>
-  <img src="assets/screenshots/mobile-overview.png" alt="Overview on a phone: two-column KPI grid" width="24%">
+  <img src="assets/screenshots/data-sources.png" alt="Data sources: daily sync schedule, per-source last sync, gap days and manual refresh" width="49%">
+  <img src="assets/screenshots/activity.png" alt="Change log: every simulated change with who, what, before, after and result" width="49%">
+</p>
+
+- **Daily sync:** a cron job (`0 6 * * *`, 06:00 Europe/Ljubljana) refreshes the data every day.
+- **Manual refresh:** each source can also be refreshed on demand. In the demo, refresh only updates a local timestamp.
+- **Per-source status:** each source shows its last sync and its **gap days** with the reason.
+- **Change log:** records every action, including rejected and validate-only ones.
+
+## On a phone
+
+<p>
+  <img src="assets/screenshots/mobile-overview.png" alt="Combined overview on a phone" width="24%">
   <img src="assets/screenshots/mobile-nav.png" alt="Navigation drawer on a phone" width="24%">
 </p>
+
+On a phone the same shell collapses into a drawer and the cards stack. Browser tests fail on any horizontal page overflow at 390 px.
+
+## Engineering
+
+- **One canonical number per metric.** Card, chart, monthly view and PDF read the same path. Integrity tests check that daily sums equal monthly totals, that Combined = Meta + Google, and that source partitions reconcile.
+- **Missing is not zero.** Coverage comes from successful syncs. An API error is never treated as zero spend.
+- **Deterministic synthetic data** has seasonality, a planted missing day, refunds, cancellations, unknown and conflicting sources, and no duplicate orders. Tests assert all of it.
+- **Grounded answers.** A fact book records every tool result, and a checker rejects any number it cannot trace.
+- **Writes that expect to be wrong** (production). Each write follows this sequence:
+  1. preview read from the platform
+  2. hash-bound confirmation
+  3. stale detection
+  4. one write
+  5. read-back
+  6. audit
+
+  New objects start paused.
+- **Locked-down static demo.**
+  - Strict CSP with no outbound connections, and no secrets.
+  - Browser tests fail on any external request, console error, CSP violation, or horizontal overflow on desktop and phone.
+- **Privacy scanning** covers the tree and the full git history. gitleaks also runs in CI.
+
+Twelve production problems, each with the decision, implementation, verified result and trade-off: [docs/engineering-challenges.md](docs/engineering-challenges.md).
 
 ## Architecture
 

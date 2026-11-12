@@ -183,7 +183,7 @@ describe('assistant and activity pages', () => {
     mount('/assistant?q=Compare%20Meta%20and%20Google', <AssistantPage />, '/assistant');
     await waitFor(() => expect(screen.getByText(/Grounded: \d+\/\d+ numbers verified/)).toBeTruthy());
     expect(document.body.textContent).toContain('Demo AI Assistant — simulated, data-grounded analysis');
-    for (const h of ['Summary', 'Key numbers', 'Evidence', 'Recommendations', 'Limits']) expect(screen.getAllByText(h).length).toBeGreaterThan(0);
+    for (const h of ['Key numbers', 'Why — evidence', 'What I would do', 'Limits']) expect(screen.getAllByText(h).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Grounded:/)).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Show tool calls' }));
     expect(screen.getByRole('region', { name: 'Tool calls' }).textContent).toContain('performanceTotals');
