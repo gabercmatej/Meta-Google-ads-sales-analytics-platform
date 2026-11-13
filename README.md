@@ -129,52 +129,109 @@ Every chart and every KPI sparkline opens the same dialog: a larger chart with t
 
 ![AI assistant answering which campaign had the best cost per lead last month: grounding badge, key numbers, what I would do, evidence and limits](assets/screenshots/assistant.png)
 
-The demo assistant is labelled **"Demo AI Assistant — simulated, data-grounded analysis"**. It does not run a language model and it was not trained or fine-tuned on anything. It shows the *orchestration pattern* the production assistant uses:
-
-1. Understand the question.
-2. Call read-only analytics tools.
-3. Record every result as a fact.
-4. Write the answer only from those facts.
-5. Check that every number in the answer traces back to one.
+The assistant answers questions about spend, leads, sales and attribution. Every number in its answer must come from a read-only tool result, and the answer is checked before it is shown. It can prepare a suggested change, but it has no write path: a person approves every change in a separate workflow.
 
 ```mermaid
 flowchart LR
-  Q(["Question"]) --> R["Intent router<br/>22 topics + unsupported"]
-  R --> P["Period and platform<br/>from the question or page filters"]
-  P --> T["Read-only analytics tools"]
-  T --> F[("Fact book<br/>every number recorded")]
-  F --> A["Answer<br/>Key numbers · What I would do<br/>Why — evidence · Limits"]
-  A --> G{"Every number<br/>in a fact?"}
-  G -- "yes" --> OK(["Badge: Grounded n/n<br/>numbers verified"])
-  G -- "no" --> X(["Number flagged,<br/>never shown as verified"])
-  R -- "not supported" --> U(["Honest limitation<br/>+ suggested alternatives"])
-  A -. "link or prepare change<br/>(no write path)" .-> H["Human confirms<br/>in Campaigns"]
+  Q(["Question"]) --> I["Intent<br/>topic · period · platform"]
+  I --> T["Read-only tools<br/>same calculations<br/>as the dashboard"]
+  T --> F[("Verified facts<br/>fact ID + metadata:<br/>metric · unit · source · period<br/>completeness · definition")]
+  F --> D["Draft answer"]
+  D --> G{"Grounding validation<br/>value AND meaning<br/>match a fact?"}
+  G -- "pass" --> A(["Answer<br/>conclusion · metrics · comparison<br/>causes · next steps · limits"])
+  G -- "fail" --> RP["Repair round<br/>model told which numbers<br/>are missing or mismatched"]
+  RP --> G2{"Revalidate"}
+  G2 -- "pass" --> A
+  G2 -- "fail" --> FB(["Safe fallback<br/>no unverified numbers"])
+  A --> RC["Recommendations<br/>budget effects labelled ESTIMATE"]
+  RC -. "draft only,<br/>no write path" .-> H["Human approval<br/>(Editor/Admin): preview,<br/>confirm, one write, read-back, log"]
 
   classDef io fill:#eef4ff,stroke:#1f5fa8,color:#0b2545
   classDef tool fill:#f3f4f6,stroke:#6b7280,color:#111827
   classDef ok fill:#ecfdf5,stroke:#059669,color:#064e3b
   classDef warn fill:#fef3c7,stroke:#b45309,color:#451a03
-  class Q,A,H io
-  class R,P,T,F tool
-  class OK ok
-  class G,X,U warn
+  class Q,A,RC io
+  class I,T,F,D tool
+  class G,G2,RP,FB warn
+  class H ok
 ```
 
-- **Evidence first.** Each answer lists the period, platform, tools and entities it used. **Show tool calls** opens the full trace.
-- **22 supported topics**, including:
-  - spend and leads, and Meta vs Google
-  - best and weakest campaign, and why CPL changed
-  - creative fatigue and top ads by CTR
-  - budget reallocation, capped at 30 % per change
-  - sales by source, attributable ROAS and advertising surplus
-  - refunds, unknown-source orders, and Google-labelled orders without evidence
-  - data quality, and month over month
-- **It says what it cannot do.** Forecasts, competitor data, personal customer details and anything outside the dataset get a stated limitation plus questions it *can* answer.
-- **No write path.** It can link to a campaign or open the confirmation workflow, but it never changes anything itself.
+### Production assistant
+
+What the production code does. The behaviour below is covered by automated tests that use a controlled model adapter.
+
+- **Facts carry IDs and metadata.** Each tool result is stored as a fact with an ID, and can carry:
+  - metric, unit, source and platform
+  - period and time zone
+  - evidence level and completeness (complete, partial, unavailable)
+  - definition
+- **Grounding checks meaning, not only value.** Each number is classified as an amount in EUR, a percentage, a ROAS ratio or a plain count:
+  - A ROAS in the answer must come from a ROAS fact. A spend of €2.56 cannot "verify" a ROAS of 2.56.
+  - EUR must come from EUR and percentages from percentages.
+  - Numbers with no fact behind them, or with the wrong meaning, start a repair round, and the answer is checked again.
+  - If the repair fails, the user sees a safe fallback without the unverified numbers.
+- **One ROAS, the dashboard's.** The assistant's attributable ROAS (Meta, Google, combined) comes from the same calculation as the dashboard card.
+  - The calculator refuses to divide revenue by spend on its own.
+  - Its operands must be fact IDs, not numbers the model wrote.
+- **Completed days only.** If a period reaches today, today is excluded, and the answer says so. Times use the account's time zone.
+- **Freshness and definitions.** A source that is failed, overdue, partial or unreachable is reported as such and is never shown as current.
+  - A sync older than 7 days is never "fresh".
+  - Google conversions, Meta leads and paid orders are kept as separate metrics.
+- **Model-written text is not evidence.** The reason or impact text the model writes for a proposed change cannot ground any number.
+- **Approval is separate.** The assistant has no tool that writes to an ad platform. It can only create a local draft.
+  - An Editor or Admin previews the draft against live data, confirms it, and the app makes one write, reads it back and logs it.
+  - New objects start paused. Activation is a separate confirmed action.
+  - If the platform's reply is lost, the write is marked *outcome unknown*. It is never retried blindly.
+
+### Demo assistant (this repository)
+
+The demo is labelled **"Demo AI Assistant — simulated, data-grounded analysis"**. It does not run a language model and was not trained or fine-tuned on anything. It follows the same pattern on the synthetic dataset:
+
+- an intent router with 22 topics, plus an honest "not supported" answer
+- read-only tools and a fact book
+- an answer built only from facts, with a grounding badge (each number must appear in a fact)
+- **Show tool calls**, which opens the full trace
+
+The demo does not include the meaning-aware check, the repair round with a live model, freshness from real syncs, or the approval workflow against a real ad account.
+
+### Example (synthetic)
+
+All names and numbers below are invented for illustration. They are not production values and not output copied from the demo.
+
+> **Q: Which campaigns should receive more budget next month, and why?**
+>
+> **Conclusion.** Campaign A is the only candidate for more budget. Campaign B should stay at its current level. Campaign C should not get more budget until tracking is fixed.
+>
+> **Key metrics (last 30 completed days; today excluded):**
+>
+> | Campaign | Spend | Leads | CPL | Previous 30 days CPL |
+> |---|---|---|---|---|
+> | Campaign A | €1,200.00 | 60 | €20.00 | €24.00 |
+> | Campaign B | €900.00 | 30 | €30.00 | €29.00 |
+> | Campaign C | €400.00 | — | no data | — |
+>
+> **Why.**
+> - Campaign A's CPL fell while spend was stable, and its frequency is still low.
+> - Campaign B is steady, with no sign of headroom.
+> - Campaign C has no lead data for the period. That is missing data, not zero leads.
+>
+> **Next steps.**
+> - Raise Campaign A's budget by up to 20 %.
+> - **Estimate:** about 70–74 leads at a similar CPL. This is a scenario based on recent ratios, not a forecast.
+> - The change is prepared as a draft for approval.
+>
+> **Limits.**
+> - The Meta leads sync is 2 days old.
+> - 60 leads is a modest sample.
+> - Attributable ROAS is shown only for orders linked by verifiable IDs.
+>
+> **Follow-up questions:** "How did Campaign A's CTR change?" · "Which ads in Campaign A drive the leads?"
+
+Every number in that answer would need a fact behind it with the right meaning. The estimate would come from the budget-scenario tool and be labelled as an estimate.
 
 ![Assistant grounding flow: question, read-only tools over the dataset, fact ledger, number check, answer](assets/diagrams/ai-assistant-flow.svg)
 
-How the production assistant works (tools, fact ledger, repair round, fallback): [docs/ai-assistant-architecture.md](docs/ai-assistant-architecture.md).
+More detail on the production design (tools, fact ledger, repair round, fallback): [docs/ai-assistant-architecture.md](docs/ai-assistant-architecture.md).
 
 ## AI recommendations
 
