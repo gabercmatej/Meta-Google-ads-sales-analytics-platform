@@ -2,9 +2,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { EmptyState, KpiCard, PageTitle, Segmented, ShareBar, Tabs, Dialog, InfoTip, type GoodWhen } from '../components/ui';
 import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
-import { COLOR } from '../components/charts/colors';
+import { COLOR, GOOGLE_METRIC_COLOR, campaignColor } from '../components/charts/colors';
 import { TimeSeriesChart, type ChartRow, type ChartSeries } from '../components/charts/TimeSeriesChart';
-import { Spark, useSparks } from '../components/OverviewCharts';
+import { Spark, sparkSpec, useSparks } from '../components/OverviewCharts';
 import { CHANNEL_LABEL, StatusBadge } from '../components/EntityBits';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
@@ -18,7 +18,6 @@ type CampView = 'cards' | 'table';
 type Tab = 'campaigns' | 'groups' | 'ads';
 
 const METRIC_TITLE: Record<GoogleDailyMetric, string> = { spend: 'Spend', impressions: 'Impressions', clicks: 'Clicks', conversions: 'Conversions' };
-const COLORS = ['#ea8a1a', '#2563eb', '#0d9488', '#7c3aed'];
 
 const CONVERSION_ACTIONS = [
   { name: 'Contact form submitted', category: 'Lead', primary: true, share: 0.46 },
@@ -61,10 +60,16 @@ export default function GoogleOverview() {
     const groups = entityPerformance(ds, { level: 'ad_group', view: 'google', range }).filter((r) => (r.current.spendMinor ?? 0) > 0);
     const ads = entityPerformance(ds, { level: 'ad', view: 'google', range }).filter((r) => (r.current.spendMinor ?? 0) > 0);
     const conv = googleConversionsByCampaign(ds, range);
-    const daily: Record<string, number[]> = {};
+    // One value per day of the range (rows are per ad and day); a day without rows stays null, not zero.
+    const days: string[] = [];
+    for (let d = new Date(`${range.start}T00:00:00Z`); d.toISOString().slice(0, 10) <= range.end; d.setUTCDate(d.getUTCDate() + 1)) days.push(d.toISOString().slice(0, 10));
+    const dayIndex = new Map(days.map((d, i) => [d, i]));
+    const daily: Record<string, (number | null)[]> = {};
     for (const r of ds.daily) {
-      if (r.platform !== 'google' || r.date < range.start || r.date > range.end) continue;
-      (daily[r.campaignId] ??= []).push(r.spendMinor);
+      const i = dayIndex.get(r.date);
+      if (r.platform !== 'google' || i === undefined) continue;
+      const row = (daily[r.campaignId] ??= days.map(() => null));
+      row[i] = (row[i] ?? 0) + r.spendMinor;
     }
     return { cur, prev, prevRange, campaigns, groups, ads, conv, daily };
   }, [range]);
@@ -145,22 +150,22 @@ export default function GoogleOverview() {
         <div className="space-y-6 bg-slate-50/50 px-4 py-5 sm:px-6">
           <Group title="Traffic and reach">
             <div>
-              <KpiCard label="Spend" value={money(c.spendMinor)} {...missing(c.spendMinor)} delta={d(c.spendMinor, p?.spendMinor, 'neutral')} comparison={cmp} sparkline={<Spark values={sparks.spend ?? []} color={COLOR.google} label="Spend trend" />} />
+              <KpiCard label="Spend" value={money(c.spendMinor)} {...missing(c.spendMinor)} delta={d(c.spendMinor, p?.spendMinor, 'neutral')} comparison={cmp} sparkline={<Spark {...sparkSpec(sparks, 'spend')} color={GOOGLE_METRIC_COLOR.spend} label="Spend trend" title="Google spend" />} />
               <ExpandLink onClick={() => setDialog('spend')} label="Spend: chart, campaigns and calculation" />
             </div>
             <div>
-              <KpiCard label="Impressions" value={count(c.impressions)} {...missing(c.impressions)} delta={d(c.impressions, p?.impressions)} comparison={cmp} sparkline={<Spark values={sparks.impressions ?? []} color={COLOR.google} label="Impressions trend" />} />
+              <KpiCard label="Impressions" value={count(c.impressions)} {...missing(c.impressions)} delta={d(c.impressions, p?.impressions)} comparison={cmp} sparkline={<Spark {...sparkSpec(sparks, 'impressions')} color={GOOGLE_METRIC_COLOR.impressions} label="Impressions trend" title="Google impressions" />} />
               <ExpandLink onClick={() => setDialog('impressions')} label="Impressions: chart, campaigns and calculation" />
             </div>
             <div>
-              <KpiCard label="Clicks" value={count(c.clicks)} {...missing(c.clicks)} delta={d(c.clicks, p?.clicks)} comparison={cmp} sparkline={<Spark values={sparks.clicks ?? []} color={COLOR.google} label="Clicks trend" />} />
+              <KpiCard label="Clicks" value={count(c.clicks)} {...missing(c.clicks)} delta={d(c.clicks, p?.clicks)} comparison={cmp} sparkline={<Spark {...sparkSpec(sparks, 'clicks')} color={GOOGLE_METRIC_COLOR.clicks} label="Clicks trend" title="Google clicks" />} />
               <ExpandLink onClick={() => setDialog('clicks')} label="Clicks: chart, campaigns and calculation" />
             </div>
           </Group>
 
           <Group title="Ad efficiency" cols={2}>
-            <KpiCard label="CTR" value={pct(c.ctr)} {...missing(c.ctr)} delta={d(c.ctr, p?.ctr)} comparison={cmp} sub="Clicks ÷ impressions" sparkline={<Spark values={sparks.ctr ?? []} color={COLOR.google} label="CTR trend" />} />
-            <KpiCard label="Avg. CPC" value={money(c.cpcMinor)} {...missing(c.cpcMinor)} delta={d(c.cpcMinor, p?.cpcMinor, 'down')} comparison={cmp} sub="Spend ÷ clicks" sparkline={<Spark values={sparks.cpc ?? []} color={COLOR.google} label="CPC trend" />} />
+            <KpiCard label="CTR" value={pct(c.ctr)} {...missing(c.ctr)} delta={d(c.ctr, p?.ctr)} comparison={cmp} sub="Clicks ÷ impressions" sparkline={<Spark {...sparkSpec(sparks, 'ctr')} color={GOOGLE_METRIC_COLOR.ctr} label="CTR trend" title="Google CTR" />} />
+            <KpiCard label="Avg. CPC" value={money(c.cpcMinor)} {...missing(c.cpcMinor)} delta={d(c.cpcMinor, p?.cpcMinor, 'down')} comparison={cmp} sub="Spend ÷ clicks" sparkline={<Spark {...sparkSpec(sparks, 'cpc')} color={GOOGLE_METRIC_COLOR.cpc} label="CPC trend" title="Google average CPC" />} />
           </Group>
 
           <Group title="Google conversions" cols={2}>
@@ -236,7 +241,7 @@ export default function GoogleOverview() {
                   <p className="text-2xs text-ink-3">{r.channelType ? CHANNEL_LABEL[r.channelType] : ''}</p>
                   <p className="tabular mt-3 text-xl font-bold text-ink">{money(r.current.spendMinor)}</p>
                   <div className="mt-1.5">
-                    <ShareBar parts={[{ label: r.name, value: share, color: COLORS[i % COLORS.length] ?? '#ea8a1a' }, { label: 'Other campaigns', value: 1 - share, color: '#e2e8f0' }]} label={`${r.name} share of Google spend`} />
+                    <ShareBar parts={[{ label: r.name, value: share, color: campaignColor(i) }, { label: 'Other campaigns', value: 1 - share, color: '#e2e8f0' }]} label={`${r.name} share of Google spend`} />
                   </div>
                   <p className="mt-1 text-2xs text-ink-3">{(share * 100).toFixed(0)}% of Google spend</p>
                   <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
@@ -255,7 +260,7 @@ export default function GoogleOverview() {
                     ))}
                   </dl>
                   <div className="mt-3">
-                    <Spark values={daily[r.id] ?? []} color={COLORS[i % COLORS.length] ?? '#ea8a1a'} label={`${r.name} spend trend`} />
+                    <Spark values={daily[r.id] ?? []} format="money" color={campaignColor(i)} label={`${r.name} spend trend`} title={`${r.name}: spend`} />
                   </div>
                 </article>
               );

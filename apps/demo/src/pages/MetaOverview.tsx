@@ -4,9 +4,9 @@ import { salesOverview } from '@sedem-ads/analytics-core';
 import { EmptyState, InfoTip, KpiCard, PageTitle, Segmented, type GoodWhen } from '../components/ui';
 import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
-import { COLOR } from '../components/charts/colors';
+import { COLOR, METRIC_COLOR } from '../components/charts/colors';
 import { TimeSeriesChart, type ChartRow, type ChartSeries } from '../components/charts/TimeSeriesChart';
-import { SourcesChart, Spark, useSparks } from '../components/OverviewCharts';
+import { SourcesChart, Spark, sparkSpec, useSparks } from '../components/OverviewCharts';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
 import { usablePreviousRange } from '../lib/useView';
@@ -205,9 +205,9 @@ export default function MetaOverview() {
 
         <div className="space-y-6 bg-slate-50/50 px-4 py-5 sm:px-6">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard series="spend" label="Total spend" value={money(c.spendMinor)} {...missing(c.spendMinor)} delta={d(c.spendMinor, p?.spendMinor, 'neutral')} comparison={cmp} sparkline={<Spark values={sparks.spend ?? []} color={COLOR.meta} label="Spend trend" />} />
-            <KpiCard series="meta-leads" label="Total leads" value={count(c.leads)} {...missing(c.leads)} delta={d(c.leads, p?.leads)} comparison={cmp} sub="Lead forms reported by Meta" sparkline={<Spark values={sparks.leads ?? []} color={COLOR.meta} label="Leads trend" />} />
-            <KpiCard label="Total CPL" value={money(c.cplMinor)} {...missing(c.cplMinor)} delta={d(c.cplMinor, p?.cplMinor, 'down')} comparison={cmp} sparkline={<Spark values={sparks.cpl ?? []} color={COLOR.meta} label="CPL trend" />} />
+            <KpiCard series="spend" label="Total spend" value={money(c.spendMinor)} {...missing(c.spendMinor)} delta={d(c.spendMinor, p?.spendMinor, 'neutral')} comparison={cmp} sparkline={<Spark {...sparkSpec(sparks, 'spend')} color={METRIC_COLOR.spend} label="Spend trend" title="Meta spend" />} />
+            <KpiCard series="meta-leads" label="Total leads" value={count(c.leads)} {...missing(c.leads)} delta={d(c.leads, p?.leads)} comparison={cmp} sub="Lead forms reported by Meta" sparkline={<Spark {...sparkSpec(sparks, 'leads')} color={METRIC_COLOR.leads} label="Leads trend" title="Meta leads" />} />
+            <KpiCard label="Total CPL" value={money(c.cplMinor)} {...missing(c.cplMinor)} delta={d(c.cplMinor, p?.cplMinor, 'down')} comparison={cmp} sparkline={<Spark {...sparkSpec(sparks, 'cpl')} color={METRIC_COLOR.cpl} label="CPL trend" title="Meta cost per lead" />} />
             <KpiCard series="paid-sales" label="Paid orders" value={count(cur.verifiedOrders)} delta={d(cur.verifiedOrders, prev?.verifiedOrders)} comparison={cmp} sub={`Verified Meta, of ${count(cur.sourceOrders)} with Meta as source`} />
           </div>
 
@@ -216,7 +216,7 @@ export default function MetaOverview() {
               Linked sales · estimate <InfoTip title="Linked sales" text="Paid orders with hard evidence of a Meta ad (lead match or click id). An estimate, not a platform-reported figure." />
             </Eyebrow>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KpiCard label="Value (incl. VAT)" value={money(cur.verifiedRevenueMinor)} delta={d(cur.verifiedRevenueMinor, prev?.verifiedRevenueMinor)} comparison={cmp} sparkline={<Spark values={sparks.revenue ?? []} color={COLOR.combined} label="Revenue trend" />} />
+              <KpiCard label="Value (incl. VAT)" value={money(cur.verifiedRevenueMinor)} delta={d(cur.verifiedRevenueMinor, prev?.verifiedRevenueMinor)} comparison={cmp} sparkline={<Spark {...sparkSpec(sparks, 'revenue')} color={METRIC_COLOR.linkedValue} label="Revenue trend" title="Linked Meta sales value" />} />
               <KpiCard
                 label="Estimated ROAS"
                 value={multiple(cur.roas)}
@@ -225,7 +225,7 @@ export default function MetaOverview() {
                 comparison={cmp}
                 sub="Verified evidence only"
                 note="Verified Meta revenue divided by Meta spend. Orders without evidence are left out, not guessed."
-                sparkline={<Spark values={sparks.roas ?? []} color={COLOR.good} label="ROAS trend" />}
+                sparkline={<Spark {...sparkSpec(sparks, 'roas')} color={METRIC_COLOR.roas} label="ROAS trend" title="Estimated Meta ROAS" />}
               />
               <KpiCard
                 label="Cost per acquired customer"

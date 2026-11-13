@@ -4,7 +4,7 @@ import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
 import { TimeSeriesChart, type ChartRow, type ChartSeries } from '../components/charts/TimeSeriesChart';
 import { SourcesChart, SELECTED_LABEL, Spark, SurplusChart } from '../components/OverviewCharts';
-import { COLOR, sourceColor, sourceLabel } from '../components/charts/colors';
+import { COLOR, METRIC_COLOR, sourceColor, sourceLabel } from '../components/charts/colors';
 import { Collapsible, InfoLine, Pill, td, tdr, tdw, th, thr } from '../components/ResultsParts';
 import { PLATFORM_LABELS, useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
@@ -52,7 +52,10 @@ export default function SalesPage() {
   const byKey = new Map<string, { orders: number; revenueMinor: number }>(part.parts.map((x) => [x.source, x]));
   const partsOrders = part.parts.reduce((a, x) => a + x.orders, 0);
   const partsRevenue = part.parts.reduce((a, x) => a + x.revenueMinor, 0);
-  const sparkOf = (pick: (x: (typeof daily)[number]) => number) => <Spark values={daily.map(pick)} color={COLOR.combined} label="Daily trend" />;
+  const dayKeys = daily.map((x) => x.key);
+  const sparkOf = (pick: (x: (typeof daily)[number]) => number, title: string, color: string, format: 'money' | 'count') => (
+    <Spark values={daily.map(pick)} dates={dayKeys} color={color} format={format} label="Daily trend" title={title} />
+  );
   const linkedColor = workspace === 'meta' ? COLOR.meta : COLOR.google;
   const linkedLabel = workspace === 'meta' ? 'Meta → CRM (directly linked)' : 'Google → CRM (click-id linked)';
 
@@ -101,10 +104,10 @@ export default function SalesPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiCard label="All orders" value={count(f.all.orders)} delta={{ pct: relChange(f.all.orders, pf?.all.orders), goodWhen: 'up' }} comparison={comparison} sub="Every CRM status" sparkline={sparkOf((x) => x.allOrders)} />
-        <KpiCard series="paid-sales" label="Paid orders" value={count(f.paid.orders)} delta={{ pct: relChange(f.paid.orders, pf?.paid.orders), goodWhen: 'up' }} comparison={comparison} sub="Marked paid in the CRM" sparkline={sparkOf((x) => x.paidOrders)} />
-        <KpiCard label="Ordered value (all orders)" value={money(f.all.valueMinor)} delta={{ pct: relChange(f.all.valueMinor, pf?.all.valueMinor), goodWhen: 'up' }} comparison={comparison} sub="Not revenue" sparkline={sparkOf((x) => x.allValue)} />
-        <KpiCard series="paid-sales" label="Paid value" value={money(f.paid.valueMinor)} delta={{ pct: relChange(f.paid.valueMinor, pf?.paid.valueMinor), goodWhen: 'up' }} comparison={comparison} sub={`${money(netOfVat(f.paid.valueMinor, vat))} excl. VAT`} sparkline={sparkOf((x) => x.paidValue)} />
+        <KpiCard label="All orders" value={count(f.all.orders)} delta={{ pct: relChange(f.all.orders, pf?.all.orders), goodWhen: 'up' }} comparison={comparison} sub="Every CRM status" sparkline={sparkOf((x) => x.allOrders, 'All orders', METRIC_COLOR.orders, 'count')} />
+        <KpiCard series="paid-sales" label="Paid orders" value={count(f.paid.orders)} delta={{ pct: relChange(f.paid.orders, pf?.paid.orders), goodWhen: 'up' }} comparison={comparison} sub="Marked paid in the CRM" sparkline={sparkOf((x) => x.paidOrders, 'Paid orders', METRIC_COLOR.paidOrders, 'count')} />
+        <KpiCard label="Ordered value (all orders)" value={money(f.all.valueMinor)} delta={{ pct: relChange(f.all.valueMinor, pf?.all.valueMinor), goodWhen: 'up' }} comparison={comparison} sub="Not revenue" sparkline={sparkOf((x) => x.allValue, 'Ordered value (all orders)', COLOR.neutral, 'money')} />
+        <KpiCard series="paid-sales" label="Paid value" value={money(f.paid.valueMinor)} delta={{ pct: relChange(f.paid.valueMinor, pf?.paid.valueMinor), goodWhen: 'up' }} comparison={comparison} sub={`${money(netOfVat(f.paid.valueMinor, vat))} excl. VAT`} sparkline={sparkOf((x) => x.paidValue, 'Paid value', METRIC_COLOR.revenue, 'money')} />
         <KpiCard
           label="Average paid order value"
           value={money(f.averagePaidMinor)}
@@ -113,7 +116,17 @@ export default function SalesPage() {
           delta={{ pct: relChange(f.averagePaidMinor, pf?.averagePaidMinor), goodWhen: 'up' }}
           comparison={comparison}
           sub="Incl. VAT"
-          sparkline={<Spark values={daily.map((x) => (x.paidOrders > 0 ? x.paidValue / x.paidOrders : null))} color={COLOR.combined} label="Daily trend" />}
+          sparkline={
+            <Spark
+              values={daily.map((x) => (x.paidOrders > 0 ? x.paidValue / x.paidOrders : null))}
+              dates={dayKeys}
+              format="money"
+              agg={{ kind: 'ratio', num: daily.map((x) => x.paidValue), den: daily.map((x) => x.paidOrders) }}
+              color={METRIC_COLOR.aov}
+              label="Daily trend"
+              title="Average paid order value"
+            />
+          }
         />
       </div>
 

@@ -5,11 +5,11 @@ import { Card, EmptyState, KpiCard, PageTitle, Segmented, StatList, StatRow, Sta
 import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
 import { TimeSeriesChart, type ChartRow } from '../components/charts/TimeSeriesChart';
-import { COLOR } from '../components/charts/colors';
+import { COLOR, metricColor } from '../components/charts/colors';
 import { AdPreview } from '../components/AdPreview';
 import { ChangeText, HintBadges, PlatformBadge } from '../components/EntityBits';
 import { CoverageNotes } from '../components/Notes';
-import { METRIC_FORMAT, Spark } from '../components/OverviewCharts';
+import { METRIC_FORMAT, Spark, sparkSpec } from '../components/OverviewCharts';
 import { EntityActions, useSim } from '../sim/SimProvider';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
@@ -90,7 +90,8 @@ export default function AdDetailPage() {
   const delta = (a: number | null, b: number | null, goodWhen: 'up' | 'down' | 'neutral' = 'up') => ({ pct: rel(a, b), goodWhen });
   const st = (v: number | null): 'ok' | 'no_data' => (v === null ? 'no_data' : 'ok');
   const color = ad.platform === 'meta' ? COLOR.meta : COLOR.google;
-  const sp = (m: Metric) => <Spark values={sparkOf(m)} color={color} label={`${METRIC_FORMAT[m].label} per day`} />;
+  const sparkData: Record<string, (number | null)[]> = { spend: sparkOf('spend'), clicks: sparkOf('clicks'), impressions: sparkOf('impressions' as Metric), leads: sparkOf('leads'), ctr: sparkOf('ctr'), cpc: sparkOf('cpc'), cpl: sparkOf('cpl') };
+  const sp = (m: Metric) => <Spark {...sparkSpec(sparkData, m)} color={metricColor(ad.platform, m)} label={`${METRIC_FORMAT[m].label} per day`} title={`${name}: ${METRIC_FORMAT[m].label}`} />;
   const fmt = METRIC_FORMAT[metric];
   const total = metric === 'spend' ? money(c.spendMinor) : metric === 'clicks' ? count(c.clicks) : metric === 'leads' ? count(c.leads) : metric === 'ctr' ? pct(c.ctr) : metric === 'cpc' ? money(c.cpcMinor) : money(c.cplMinor);
   const campaignHref = `/campaigns?platform=${ad.platform}&level=adsets&campaign=${ad.campaignId}`;

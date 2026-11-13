@@ -143,8 +143,10 @@ describe('planted cases', () => {
 
   it('cross-month order moves between months by order date vs payment date', () => {
     const amount = order(p.crossMonthPaidLaterOrderId).amountMinor;
+    // Isolate the planted order: other random orders also cross month boundaries (incidental).
+    const only = { ...ds, orders: [order(p.crossMonthPaidLaterOrderId)] };
     const total = (range: { start: string; end: string }, basis: 'order' | 'payment') =>
-      q.salesSeries(ds, { range, granularity: 'monthly', basis })[0]!.totalMinor;
+      q.salesSeries(only, { range, granularity: 'monthly', basis })[0]!.totalMinor;
     const sep = { start: '2026-09-01', end: '2026-09-30' };
     const oct = { start: '2026-10-01', end: '2026-10-31' };
     // the order is September by order date, October by payment date (Ljubljana time)

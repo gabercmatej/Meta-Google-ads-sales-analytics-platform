@@ -1,6 +1,6 @@
 // Shared UI primitives in the product's design language (Tailwind classes + the component
 // classes in styles/globals.css). Pages compose these; they hold no data logic.
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useRef, type ButtonHTMLAttributes, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { NO_DATA } from '../lib/format';
 
 /* Surfaces ----------------------------------------------------------------------------- */
@@ -230,8 +230,15 @@ export function KpiCard({
 }) {
   const primary = size === 'primary';
   const missing = state !== 'ok';
+  const zoomable = !!sparkline && !missing;
+  /** The whole card opens the sparkline's chart; the info tip and other controls keep their own action. */
+  const openChart = (e: ReactMouseEvent<HTMLDivElement>) => {
+    const t = e.target as Element;
+    if (!e.currentTarget.contains(t) || t.closest('button,a,input,select,textarea,label,[role="button"],[role="dialog"]')) return;
+    e.currentTarget.querySelector<HTMLButtonElement>('[data-spark-trigger]')?.click();
+  };
   return (
-    <div className={`card ${primary ? 'px-4 py-4 sm:px-5' : 'px-4 py-3.5'}`}>
+    <div className={`card ${primary ? 'px-4 py-4 sm:px-5' : 'px-4 py-3.5'} ${zoomable ? 'cursor-zoom-in transition-shadow hover:shadow-pop' : ''}`} onClick={zoomable ? openChart : undefined}>
       <div className="flex items-center text-xs font-medium text-ink-3">
         {series && <span aria-hidden className={`mr-1.5 h-2.5 w-2.5 shrink-0 rounded-[3px] ${SERIES_BG[series]}`} />}
         <span className="min-w-0 truncate">{label}</span>

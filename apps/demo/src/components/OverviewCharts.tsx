@@ -1,6 +1,6 @@
 // Chart bodies used by the Overview page and by the KPI "expanded chart" dialog.
 // Each reads the global view (platform, range, granularity) so card and dialog always agree.
-import { useId, useMemo } from 'react';
+import { useMemo } from 'react';
 import { metricSeries, salesSeries, type PlatformView, type SeriesMetric } from '@sedem-ads/analytics-core';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
@@ -8,6 +8,7 @@ import { bucketFacts, dailyFacts, platformDefs, platformRows, roasRows, SELECTED
 import { count, countAxis, money, moneyAxis, multiple, pct } from '../lib/format';
 import { combinedFigures } from '../lib/combined';
 import { StackedBar, TimeSeriesChart, type ChartRow, type ChartSeries } from './charts/TimeSeriesChart';
+import type { SparkAgg, SparkProps } from './charts/Sparkline';
 import { COLOR, SOURCE_KEYS, sourceColor, sourceLabel } from './charts/colors';
 
 export interface BodyProps {
@@ -217,54 +218,30 @@ export function SourceLinesChart({ height, fixedWidth, measure }: BodyProps & { 
   );
 }
 
-/** KPI sparkline: a line with a soft area underneath, sized by its container. Null values break the line (no data is not zero). */
-export function Spark({ values, color = COLOR.combined, label }: { values: readonly (number | null)[]; color?: string; label: string }) {
-  const gid = useId();
-  const nums = values.filter((v): v is number => v !== null && Number.isFinite(v));
-  if (nums.length < 2) return null;
-  const lo = Math.min(...nums);
-  const hi = Math.max(...nums);
-  const span = hi - lo || 1;
-  const W = 120;
-  const H = 40;
-  const x = (i: number) => (i / (values.length - 1)) * W;
-  const y = (v: number) => H - 4 - ((v - lo) / span) * (H - 10);
-  let d = '';
-  let area = '';
-  let pen = false;
-  let first = 0;
-  let last = 0;
-  values.forEach((v, i) => {
-    if (v === null || !Number.isFinite(v)) {
-      if (pen) area += `L${x(last).toFixed(1)},${H} Z `;
-      pen = false;
-      return;
-    }
-    d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
-    if (!pen) {
-      first = i;
-      area += `M${x(i).toFixed(1)},${H} L${x(i).toFixed(1)},${y(v).toFixed(1)} `;
-    } else area += `L${x(i).toFixed(1)},${y(v).toFixed(1)} `;
-    last = i;
-    pen = true;
-  });
-  if (pen) area += `L${x(last).toFixed(1)},${H} Z`;
-  void first;
-  return (
-    <svg role="img" aria-label={label} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block h-full w-full">
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill={`url(#${gid})`} stroke="none" />
-      <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
+export { Spark } from './charts/Sparkline';
+
+/** Spark props for a `useSparks` key: daily values, value format and how a month is combined (ratios from sums). */
+export function sparkSpec(sparks: Record<string, (number | null)[]>, key: string): Pick<SparkProps, 'values' | 'format' | 'agg'> {
+  const v = sparks[key] ?? [];
+  const ratio = (num: string, den: string, scale = 1): SparkAgg => ({ kind: 'ratio', num: sparks[num] ?? [], den: sparks[den] ?? [], scale });
+  switch (key) {
+    case 'spend':
+    case 'revenue':
+    case 'surplus':
+      return { values: v, format: 'money', agg: { kind: 'sum' } };
+    case 'cpc':
+      return { values: v, format: 'money', agg: ratio('spend', 'clicks') };
+    case 'cpl':
+      return { values: v, format: 'money', agg: ratio('spend', 'leads') };
+    case 'ctr':
+      return { values: v, format: 'pct', agg: ratio('clicks', 'impressions') };
+    case 'roas':
+      return { values: v, format: 'multiple', agg: ratio('_roasNum', '_roasDen') };
+    default:
+      return { values: v, format: 'count', agg: { kind: 'sum' } };
+  }
 }
 
-/** Daily series per KPI for sparklines (completed days of the selected range). */
 export function useSparks(view: PlatformView): Record<string, (number | null)[]> {
   const { range } = useAppState();
   return useMemo(() => {
@@ -276,6 +253,8 @@ export function useSparks(view: PlatformView): Record<string, (number | null)[]>
     const buckets = bucketFacts(dailyFacts(ds, range), skeleton, 'daily');
     const roas = roasRows(buckets).map((r) => (typeof r[view === 'combined' ? 'total' : view] === 'number' ? (r[view === 'combined' ? 'total' : view] as number) : null));
     const surplus = surplusRows(buckets, view).map((r) => (typeof r.surplus === 'number' ? r.surplus : null));
+    const roasDen = buckets.map((b) => (view === 'meta' ? b.spendMeta : view === 'google' ? b.spendGoogle : b.spendTotal));
+    const roasNum = buckets.map((b, i) => (roasDen[i] === null ? null : view === 'meta' ? b.revMeta : view === 'google' ? b.revGoogle : b.revTotalVerified));
     const rev = sales.map((p) => (view === 'combined' ? p.totalMinor : (p.bySource[view] ?? 0)));
     return {
       spend: pick('spend'),
@@ -289,6 +268,8 @@ export function useSparks(view: PlatformView): Record<string, (number | null)[]>
       revenue: rev,
       roas,
       surplus,
+      _roasNum: roasNum,
+      _roasDen: roasDen,
     };
   }, [range, view]);
 }

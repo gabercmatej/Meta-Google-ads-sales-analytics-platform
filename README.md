@@ -114,6 +114,13 @@ The first screen answers three questions: how much are we investing in advertisi
 
 Each platform overview has the same advertising summary, linked-sales estimate, delivery block and trend charts. A partial period is flagged with the days that have data and the dates that are missing. Chart lines show a gap there instead of dropping to zero.
 
+Every chart and every KPI sparkline opens the same dialog: a larger chart with tooltips and legend toggles, Daily/Monthly (monthly ratios are recomputed from sums), the values table, how it is calculated, and Print / Save PDF. Each KPI has its own colour. The per-chart audit is in [docs/chart-fidelity-audit.md](docs/chart-fidelity-audit.md).
+
+<p>
+  <img src="assets/screenshots/chart-expanded.png" alt="Expanded chart: daily spend by platform with legend, metric selector, Daily/Monthly, values and Print / Save PDF" width="49%">
+  <img src="assets/screenshots/spark-expanded.png" alt="Expanded KPI sparkline: Meta spend by month with tooltip, how it is calculated and Print / Save PDF" width="49%">
+</p>
+
 ## AI assistant
 
 ![AI assistant answering which campaign had the best cost per lead last month: grounding badge, key numbers, what I would do, evidence and limits](assets/screenshots/assistant.png)

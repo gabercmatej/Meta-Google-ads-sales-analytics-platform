@@ -397,7 +397,7 @@ export default function CampaignsPage() {
     const has = vals.filter((v) => v !== null).length >= 2;
     return has ? (
       <div className="ml-auto h-5 w-24" title={`${resultMeta.label} per day`}>
-        <Spark values={vals} color={r.platform === 'meta' ? COLOR.meta : COLOR.google} label={`${resultMeta.label} per day for ${r.name}`} />
+        <Spark values={vals} color={r.platform === 'meta' ? COLOR.meta : COLOR.google} label={`${resultMeta.label} per day for ${r.name}`} title={`${r.name}: ${resultMeta.label.toLowerCase()}`} />
       </div>
     ) : (
       <span className="no-data text-slate-400" title="No daily series for this result">–</span>

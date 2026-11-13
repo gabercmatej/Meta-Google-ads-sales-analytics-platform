@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useChartHost, useChartRole } from './ChartHost';
-import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { NO_DATA } from '../../lib/format';
+import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { NO_DATA, date } from '../../lib/format';
 import type { MarkerShape } from './colors';
 
 export interface ChartSeries {
@@ -17,10 +17,12 @@ export interface ChartSeries {
   shape?: MarkerShape;
   /** Bars: colour used for negative values (e.g. a negative surplus). */
   negativeColor?: string;
-  /** Line width in px; the total/subtotal lines are drawn thicker. */
+  /** Line width in px; by default it follows the role. */
   width?: number;
   /** Dashed on screen (print and PDF force solid lines). */
   dashed?: boolean;
+  /** total / subtotal lines are drawn thickest and on top; components thinner and lighter. */
+  role?: 'total' | 'subtotal' | 'component';
 }
 
 export interface ChartRow {
@@ -51,16 +53,49 @@ export interface TimeSeriesChartProps {
 
 const hasValue = (row: ChartRow, key: string): boolean => typeof row[key] === 'number' && Number.isFinite(row[key] as number);
 
-export function LegendGlyph(props: { shape: MarkerShape; color: string; kind?: 'line' | 'area' | 'bar'; hollow?: boolean }) {
+type Role = 'total' | 'subtotal' | 'component' | 'plain';
+function roleFor(s: ChartSeries): Role {
+  if (s.role) return s.role;
+  if (s.key === 'total') return 'total';
+  if (s.key === 'selected') return 'subtotal';
+  return 'plain';
+}
+const isStrong = (s: ChartSeries) => roleFor(s) === 'total' || roleFor(s) === 'subtotal';
+
+/** Line width by role; the expanded view draws slightly heavier lines. */
+function lineWidth(s: ChartSeries, zoom: boolean): number {
+  if (s.width) return s.width;
+  const r = roleFor(s);
+  if (r === 'total' || r === 'subtotal') return zoom ? 3 : 2.5;
+  if (r === 'component') return zoom ? 1.75 : 1.5;
+  return zoom ? 2.25 : 1.75;
+}
+
+const TICK = '#64748b';
+const GRID = '#e8edf3';
+
+export function LegendGlyph(props: { shape: MarkerShape; color: string; kind?: 'line' | 'area' | 'bar'; hollow?: boolean; dashed?: boolean }) {
   return (
-    <svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true" className="shrink-0">
+    <svg width="16" height="10" viewBox="0 0 16 10" aria-hidden="true" className="shrink-0">
       {props.kind === 'bar' ? (
-        <rect x="5" y="1" width="12" height="10" rx="1.5" fill={props.color} />
+        <rect x="3" y="1" width="10" height="8" rx="2" fill={props.color} />
       ) : (
-        <line x1="0" y1="6" x2="22" y2="6" stroke={props.color} strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="1.5" y1="5" x2="14.5" y2="5" stroke={props.color} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={props.dashed ? '3 3' : undefined} />
       )}
     </svg>
   );
+}
+
+/** "2026-11-03" -> "Tue, 3 Nov 2026"; "2026-11" -> "November 2026". */
+export function longDate(key: string, fallback = key): string {
+  if (/^\d{4}-\d{2}$/.test(key)) {
+    return new Intl.DateTimeFormat('en-IE', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${key}-01T00:00:00Z`));
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    const wd = new Intl.DateTimeFormat('en-IE', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${key}T00:00:00Z`));
+    return `${wd}, ${date(key)}`;
+  }
+  return fallback;
 }
 
 interface TipProps {
@@ -74,52 +109,43 @@ interface TipProps {
 function ChartTooltip({ active, payload, series, yFormat, note }: TipProps) {
   const row = payload?.[0]?.payload;
   if (!active || !row) return null;
-  return (
-    <div className="min-w-[190px] max-w-[280px] rounded-xl bg-white px-3 py-2 text-xs shadow-[0_8px_24px_rgb(16_24_40/0.12),0_0_0_1px_rgb(16_24_40/0.06)]" role="tooltip">
-      <div className="mb-1 font-semibold text-ink">
-        {row.label}
-        {row.incomplete && <span className="font-medium text-ink-3"> · incomplete</span>}
+  const parts = series.filter((s) => !isStrong(s));
+  const subs = series.filter((s) => roleFor(s) === 'subtotal');
+  const totals = series.filter((s) => roleFor(s) === 'total');
+  const isMonth = /^\d{4}-\d{2}$/.test(row.key);
+  const item = (s: ChartSeries, cls: string) => {
+    const v = row[s.key];
+    const ok = typeof v === 'number' && Number.isFinite(v);
+    return (
+      <div className={`flex items-center gap-2 py-px ${cls}`} key={s.key}>
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} aria-hidden="true" />
+        <span className="flex-1">{s.label}</span>
+        <span className={`tabular ${ok ? '' : 'font-normal normal-case text-slate-300'}`}>{ok ? (s.format ?? yFormat)(v) : `${NO_DATA} no data`}</span>
       </div>
-      {series.map((s) => {
-        const v = row[s.key];
-        const ok = typeof v === 'number' && Number.isFinite(v);
-        return (
-          <div className="flex items-center gap-2 py-px" key={s.key}>
-            <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ background: s.color }} aria-hidden="true" />
-            <span className="flex-1 text-ink-2">{s.label}</span>
-            <span className={`tabular ${ok ? 'font-semibold text-ink' : 'text-ink-3'}`}>{ok ? (s.format ?? yFormat)(v) : `${NO_DATA} No data`}</span>
-          </div>
-        );
-      })}
-      {row.incomplete && <div className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-snug text-ink-3">Incomplete: partial or missing days. Totals use only the days that have data.</div>}
+    );
+  };
+  const partCls = parts.length > 1 || subs.length + totals.length > 0 ? 'text-ink-3' : 'font-semibold text-ink';
+  return (
+    <div className="min-w-48 max-w-[300px] rounded-xl border border-line bg-white px-3 py-2.5 text-xs shadow-pop" role="tooltip">
+      <div className="mb-1.5 font-semibold text-ink">{longDate(row.key, row.label)}</div>
+      {parts.map((s) => item(s, partCls))}
+      {subs.length > 0 && <div className="mt-1 border-t border-line pt-1">{subs.map((s) => item(s, 'font-semibold text-ink-2'))}</div>}
+      {totals.length > 0 && <div className="mt-1 border-t border-line pt-1">{totals.map((s) => item(s, 'font-bold uppercase tracking-wide text-ink'))}</div>}
+      {row.incomplete && (
+        <div className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-snug text-ink-3">
+          {isMonth ? 'Incomplete month: only the days with data are counted.' : 'Incomplete day: data for this day is partial.'}
+        </div>
+      )}
       {note && <div className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-snug text-ink-3">{note}</div>}
     </div>
   );
 }
 
-function incompleteRuns(data: readonly ChartRow[]): Array<[string, string]> {
-  const runs: Array<[string, string]> = [];
-  let start: string | null = null;
-  let last: string | null = null;
-  for (const d of data) {
-    if (d.incomplete) {
-      start ??= d.key;
-      last = d.key;
-    } else if (start && last) {
-      runs.push([start, last]);
-      start = last = null;
-    }
-  }
-  if (start && last) runs.push([start, last]);
-  return runs;
-}
-
-const isTotalKey = (k: string) => k === 'total' || k === 'selected';
-
 export function TimeSeriesChart(props: TimeSeriesChartProps) {
   const { data, yFormat, height = 300 } = props;
   const host = useChartHost();
   const role = useChartRole();
+  const uid = useId().replace(/:/g, '');
   const [localHidden, setLocalHidden] = useState<ReadonlySet<string>>(() => new Set());
   const hidden = host ? host.hidden : localHidden;
   const toggle = (key: string) => {
@@ -136,6 +162,7 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
     report?.(role, { data, series: props.series, yFormat, ariaLabel: props.ariaLabel, tooltipNote: props.tooltipNote });
   }, [report, role, data, props.series, yFormat, props.ariaLabel, props.tooltipNote]);
 
+  const zoom = height >= 350;
   const grid = host?.options.grid ?? true;
   const allLines = props.series.every((s) => (s.kind ?? 'line') === 'line');
   const asBars = (host?.options.bars ?? false) && allLines;
@@ -156,56 +183,108 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
   }
 
   const bars = series.filter((s) => s.kind === 'bar');
+  const nonBars = series.filter((s) => s.kind !== 'bar');
+  // Bars first, then component lines, then total/subtotal lines on top.
+  const drawOrder = [...bars, ...nonBars.filter((s) => !isStrong(s)), ...nonBars.filter((s) => roleFor(s) === 'subtotal'), ...nonBars.filter((s) => roleFor(s) === 'total')];
+  const legendOrder = [...props.series.filter(isStrong), ...props.series.filter((s) => !isStrong(s))];
   // Count series (whole numbers only) get integer ticks so the axis never shows 0.3 / 0.5 or duplicate labels.
   const wholeOnly = (axis: 'left' | 'right') => {
     const ss = series.filter((s) => (s.axis === 'right' ? 'right' : 'left') === axis);
     return ss.length > 0 && data.every((d) => ss.every((s) => !hasValue(d, s.key) || Number.isInteger(d[s.key] as number)));
   };
   const hasNegative = data.some((d) => series.some((s) => typeof d[s.key] === 'number' && (d[s.key] as number) < 0));
+  const fontSize = zoom ? 13 : 12;
+  const tickCount = zoom ? 6 : 4;
+  const showDots = data.length <= 14;
+  const stacked = (s: ChartSeries) => !!s.stackId && bars.filter((b) => b.stackId === s.stackId).length > 1;
+  const topOfStack = (s: ChartSeries) => {
+    const same = bars.filter((b) => b.stackId === s.stackId);
+    return same[same.length - 1]?.key === s.key;
+  };
+  const hatchId = (i: number) => `${uid}-hatch-${i}`;
 
   const chart = (
-    <ComposedChart data={data as ChartRow[]} margin={{ top: 8, right: hasRight ? 4 : 12, bottom: 4, left: 0 }} accessibilityLayer={false}>
-      {grid && <CartesianGrid stroke="#e5e7eb" vertical={false} />}
+    <ComposedChart data={data as ChartRow[]} margin={{ top: 8, right: hasRight ? 4 : 12, bottom: 2, left: 0 }} barCategoryGap="28%" accessibilityLayer={false}>
+      <defs>
+        {bars.map((s, i) => (
+          <pattern key={s.key} id={hatchId(i)} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="6" height="6" fill={s.color} fillOpacity="0.28" />
+            <line x1="0" y1="0" x2="0" y2="6" stroke={s.color} strokeWidth="2.5" />
+          </pattern>
+        ))}
+      </defs>
+      {grid && <CartesianGrid stroke={GRID} vertical={false} />}
       <XAxis
         dataKey="key"
         tickFormatter={(k: string) => labelByKey.get(k) ?? k}
-        tick={{ fontSize: 11, fill: '#6b7280' }}
+        tick={{ fontSize, fill: TICK }}
         tickLine={false}
-        axisLine={{ stroke: '#d1d5db' }}
-        minTickGap={22}
+        axisLine={{ stroke: '#cbd5e1' }}
+        tickMargin={6}
+        minTickGap={zoom ? 28 : 22}
         interval="preserveStartEnd"
       />
-      <YAxis yAxisId="left" allowDecimals={!wholeOnly('left')} tickFormatter={yFormat} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} width={58} domain={[(min: number) => Math.min(0, min), 'auto']} />
+      <YAxis yAxisId="left" allowDecimals={!wholeOnly('left')} tickCount={tickCount} tickFormatter={yFormat} tick={{ fontSize, fill: TICK }} tickLine={false} axisLine={false} width={zoom ? 64 : 56} domain={[(min: number) => Math.min(0, min), 'auto']} />
       {hasRight && (
-        <YAxis yAxisId="right" allowDecimals={!wholeOnly('right')} orientation="right" tickFormatter={props.rightFormat ?? yFormat} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} width={50} domain={[0, 'auto']} />
+        <YAxis yAxisId="right" allowDecimals={!wholeOnly('right')} tickCount={tickCount} orientation="right" tickFormatter={props.rightFormat ?? yFormat} tick={{ fontSize, fill: TICK }} tickLine={false} axisLine={false} width={zoom ? 54 : 48} domain={[0, 'auto']} />
       )}
-      {incompleteRuns(data).map(([a, b]) => (
-        <ReferenceArea key={`${a}-${b}`} yAxisId="left" x1={a} x2={b} fill="#94a3b8" fillOpacity={0.14} strokeOpacity={0} ifOverflow="visible" />
-      ))}
-      {hasNegative && <ReferenceLine yAxisId="left" y={0} stroke="#6b7280" />}
+      {hasNegative && <ReferenceLine yAxisId="left" y={0} stroke="#64748b" />}
       <Tooltip
         isAnimationActive={false}
-        cursor={{ stroke: '#9ca3af', strokeWidth: 1 }}
+        cursor={bars.length > 0 ? { fill: '#f1f5f9', fillOpacity: 0.7 } : { stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' }}
         content={(p: unknown) => <ChartTooltip {...(p as Pick<TipProps, 'active' | 'payload'>)} series={series} yFormat={yFormat} note={props.tooltipNote} />}
       />
-      {series.map((s) => {
+      {drawOrder.map((s) => {
         const yAxisId = s.axis === 'right' ? 'right' : 'left';
-        const width = s.width ?? (isTotalKey(s.key) ? 3 : 2.25);
+        const width = lineWidth(s, zoom);
+        const component = roleFor(s) === 'component';
+        const activeDot = { r: 4, stroke: '#fff', strokeWidth: 2, fill: s.color };
+        const plainDot = showDots && !component ? { r: 2, fill: s.color, strokeWidth: 0 } : false;
+        // An incomplete period on a line is an open dot (the line counterpart of a hatched bar).
+        const dot = anyIncomplete
+          ? (p: { cx?: number; cy?: number; index?: number; payload?: ChartRow }) => {
+              const k = `${s.key}-${p.index}`;
+              if (p.cx === undefined || p.cy === undefined || !p.payload || !hasValue(p.payload, s.key)) return <g key={k} />;
+              if (p.payload?.incomplete) return <circle key={k} cx={p.cx} cy={p.cy} r={zoom ? 4 : 3} fill="#fff" stroke={s.color} strokeWidth={2} />;
+              return plainDot ? <circle key={k} cx={p.cx} cy={p.cy} r={2} fill={s.color} /> : <g key={k} />;
+            }
+          : plainDot;
         if (s.kind === 'bar') {
+          const bi = bars.indexOf(s);
+          const radius: [number, number, number, number] = !stacked(s) || topOfStack(s) ? [4, 4, 0, 0] : [0, 0, 0, 0];
           return (
-            <Bar key={s.key} dataKey={s.key} yAxisId={yAxisId} stackId={s.stackId} fill={s.color} isAnimationActive={false} maxBarSize={36} name={s.label}>
+            <Bar key={s.key} dataKey={s.key} yAxisId={yAxisId} stackId={s.stackId} fill={s.color} isAnimationActive={false} maxBarSize={zoom ? 28 : 18} radius={radius} name={s.label}>
               {data.map((d) => {
                 const v = d[s.key];
                 const neg = typeof v === 'number' && v < 0 && s.negativeColor;
-                return <Cell key={d.key} fill={neg ? s.negativeColor : s.color} fillOpacity={d.incomplete ? 0.5 : 1} stroke={s.color} strokeWidth={d.incomplete ? 1 : 0} />;
+                const fill = d.incomplete ? `url(#${hatchId(bi)})` : neg ? s.negativeColor : s.color;
+                return <Cell key={d.key} fill={fill || s.color} />;
               })}
             </Bar>
           );
         }
         if (s.kind === 'area') {
-          return <Area key={s.key} dataKey={s.key} yAxisId={yAxisId} stackId={s.stackId} stroke={s.color} fill={s.color} fillOpacity={0.14} strokeWidth={width} connectNulls={false} isAnimationActive={false} dot={false} activeDot={{ r: 4 }} name={s.label} />;
+          return <Area key={s.key} dataKey={s.key} yAxisId={yAxisId} type="monotone" stackId={s.stackId} stroke={s.color} fill={s.color} fillOpacity={0.12} strokeWidth={width} connectNulls={false} isAnimationActive={false} dot={dot} activeDot={activeDot} name={s.label} />;
         }
-        return <Line key={s.key} dataKey={s.key} yAxisId={yAxisId} type="linear" stroke={s.color} strokeWidth={width} strokeDasharray={s.dashed ? "6 4" : undefined} connectNulls={false} isAnimationActive={false} dot={false} activeDot={{ r: 4 }} name={s.label} />;
+        return (
+          <Line
+            key={s.key}
+            dataKey={s.key}
+            yAxisId={yAxisId}
+            type="monotone"
+            stroke={s.color}
+            strokeOpacity={component && zoom ? 0.7 : 1}
+            strokeWidth={width}
+            strokeDasharray={s.dashed ? '6 4' : undefined}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            connectNulls={false}
+            isAnimationActive={false}
+            dot={dot}
+            activeDot={activeDot}
+            name={s.label}
+          />
+        );
       })}
     </ComposedChart>
   );
@@ -215,10 +294,9 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
   return (
     <figure className="m-0 min-w-0" aria-label={props.ariaLabel}>
       <figcaption className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-ink-2" data-print-legend>
-        <ul className="flex flex-wrap gap-x-2 gap-y-1.5" aria-label="Legend">
-          {props.series.map((s) => {
+        <ul className="flex flex-wrap gap-x-1.5 gap-y-1.5" aria-label="Legend">
+          {legendOrder.map((s) => {
             const off = hidden.has(s.key);
-            const strong = isTotalKey(s.key);
             return (
               <li key={s.key}>
                 <button
@@ -226,9 +304,9 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
                   aria-pressed={!off}
                   title={off ? `Show ${s.label}` : `Hide ${s.label}`}
                   onClick={() => toggle(s.key)}
-                  className={`inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 ring-1 ring-inset ring-line transition-colors hover:bg-slate-50 ${strong ? 'font-semibold text-ink' : ''}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-inset ring-line transition-colors hover:bg-slate-100 ${isStrong(s) ? 'font-semibold text-ink' : ''}`}
                 >
-                  <LegendGlyph shape="circle" color={s.color} kind={s.kind === 'bar' || asBars ? 'bar' : 'line'} />
+                  <LegendGlyph shape="circle" color={s.color} kind={s.kind === 'bar' || asBars ? 'bar' : 'line'} dashed={s.dashed} />
                   <span className={off ? 'line-through opacity-60' : ''}>{s.label}</span>
                 </button>
               </li>
@@ -237,7 +315,7 @@ export function TimeSeriesChart(props: TimeSeriesChartProps) {
         </ul>
         {(anyIncomplete || anyGap || props.legendNote) && (
           <span className="basis-full text-[11px] leading-snug text-ink-3">
-            {anyIncomplete && 'Shaded area and lighter bars = incomplete period (partial or missing days). '}
+            {anyIncomplete && `${[bars.length > 0 && 'Hatched bars', nonBars.length > 0 && 'open dots'].filter(Boolean).join(' and ').replace(/^o/, 'O')} = incomplete period (partial or missing days). `}
             {anyGap && 'Gaps = no data (not zero). '}
             {props.legendNote}
           </span>

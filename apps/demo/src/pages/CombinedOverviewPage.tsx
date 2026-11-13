@@ -4,7 +4,7 @@ import { Badge, EmptyState, KpiCard, PageTitle, ShareBar, type GoodWhen } from '
 import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
 import { COLOR } from '../components/charts/colors';
-import { MetricChart, RoasChart, SourceLinesChart, Spark, SurplusChart, SurplusSummary, SELECTED_LABEL, metricOptions, useSparks } from '../components/OverviewCharts';
+import { MetricChart, RoasChart, SourceLinesChart, Spark, sparkSpec, SurplusChart, SurplusSummary, SELECTED_LABEL, metricOptions, useSparks } from '../components/OverviewCharts';
 import { useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
 import { usablePreviousRange } from '../lib/useView';
@@ -118,9 +118,9 @@ export default function CombinedOverviewPage() {
       <section className="min-w-0">
         <h2 className="mb-3.5 text-lg font-semibold tracking-tight text-ink">Advertising investment</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard series="spend" label="Total spend" value={money(totalMinor)} {...spendState(totalMinor)} delta={d(totalMinor, prev?.spend.totalMinor, 'neutral')} comparison={cmp} sparkline={<Spark values={sparks.spend ?? []} label="Total spend trend" />} />
-          <KpiCard label="Meta spend" value={money(metaMinor)} {...spendState(metaMinor)} delta={d(metaMinor, prev?.spend.metaMinor, 'neutral')} comparison={cmp} sparkline={<Spark values={sparksMeta.spend ?? []} color={COLOR.meta} label="Meta spend trend" />} />
-          <KpiCard label="Google spend" value={money(googleMinor)} {...spendState(googleMinor)} delta={d(googleMinor, prev?.spend.googleMinor, 'neutral')} comparison={cmp} sparkline={<Spark values={sparksGoogle.spend ?? []} color={COLOR.google} label="Google spend trend" />} />
+          <KpiCard series="spend" label="Total spend" value={money(totalMinor)} {...spendState(totalMinor)} delta={d(totalMinor, prev?.spend.totalMinor, 'neutral')} comparison={cmp} sparkline={<Spark {...sparkSpec(sparks, 'spend')} color={COLOR.combined} label="Total spend trend" title="Total spend (Meta + Google)" />} />
+          <KpiCard label="Meta spend" value={money(metaMinor)} {...spendState(metaMinor)} delta={d(metaMinor, prev?.spend.metaMinor, 'neutral')} comparison={cmp} sparkline={<Spark {...sparkSpec(sparksMeta, 'spend')} color={COLOR.meta} label="Meta spend trend" title="Meta spend" />} />
+          <KpiCard label="Google spend" value={money(googleMinor)} {...spendState(googleMinor)} delta={d(googleMinor, prev?.spend.googleMinor, 'neutral')} comparison={cmp} sparkline={<Spark {...sparkSpec(sparksGoogle, 'spend')} color={COLOR.google} label="Google spend trend" title="Google spend" />} />
           <div className="card px-4 py-3.5" data-testid="platform-share">
             <div className="text-xs font-medium text-ink-3">Platform share of spend</div>
             {spendOk ? (

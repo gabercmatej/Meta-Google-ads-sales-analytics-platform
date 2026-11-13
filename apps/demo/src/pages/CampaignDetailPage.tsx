@@ -5,7 +5,7 @@ import { Card, EmptyState, KpiCard, PageTitle, Section, Segmented, StatList, Sta
 import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
 import { TimeSeriesChart } from '../components/charts/TimeSeriesChart';
-import { COLOR } from '../components/charts/colors';
+import { COLOR, metricColor } from '../components/charts/colors';
 import { AdPreview } from '../components/AdPreview';
 import { ChangeText, HintBadges, PlatformBadge, CHANNEL_LABEL, OBJECTIVE_LABEL } from '../components/EntityBits';
 import { CoverageNotes } from '../components/Notes';
@@ -89,7 +89,7 @@ export default function CampaignDetailPage() {
   const color = campaign.platform === 'meta' ? COLOR.meta : COLOR.google;
   const pmax = isPmax(ds, campaign.id);
   const groupWord = campaign.platform === 'meta' ? 'Ad set' : pmax ? 'Asset group' : 'Ad group';
-  const spark = <Spark values={resultTrend(ds, row, 'leads', range)} color={color} label="Leads per day" />;
+  const spark = <Spark values={resultTrend(ds, row, 'leads', range)} color={metricColor(campaign.platform, 'leads')} label="Leads per day" title={`${name}: leads`} />;
   const kind = campaign.objective ? OBJECTIVE_LABEL[campaign.objective] : campaign.channelType ? CHANNEL_LABEL[campaign.channelType] : '–';
   const metricTotal = metric === 'spend' ? money(c.spendMinor) : metric === 'clicks' ? count(c.clicks) : metric === 'leads' ? count(c.leads) : metric === 'ctr' ? pct(c.ctr) : metric === 'cpc' ? money(c.cpcMinor) : money(c.cplMinor);
   const shape = campaign.platform === 'meta' ? 'circle' : 'square';

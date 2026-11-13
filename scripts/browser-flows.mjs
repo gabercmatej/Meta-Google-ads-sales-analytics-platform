@@ -1,6 +1,7 @@
 // End-to-end flows for scripts/browser-test.mjs. Each step is independent: a failure is reported and the next step runs.
 // With SCREENSHOTS set, the README screenshots are captured along the way.
 import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true };
 
@@ -54,6 +55,21 @@ export async function runFlows({ page, base, step, shots, newPage }) {
     expect(/period=last90/.test(page.url()), 'period was lost when switching platform');
     await channel('combined').click();
     await page.waitForURL(/\/combined/);
+  });
+
+  await step('screenshots: expanded chart and expanded KPI sparkline', async () => {
+    await go('/combined?period=last90');
+    await page.getByRole('button', { name: 'Expand chart: Daily spend by platform' }).click();
+    await expectVisible(page.getByRole('dialog', { name: 'Daily spend by platform' }), 'card dialog');
+    await shot('chart-expanded');
+    await page.keyboard.press('Escape');
+    await go('/overview?platform=meta&period=yearToDate');
+    await page.locator('main [data-spark-trigger]').first().click();
+    const dialog = page.getByRole('dialog');
+    await expectVisible(dialog, 'sparkline dialog');
+    await dialog.getByRole('group', { name: 'Show chart by day or month' }).getByRole('button', { name: 'Monthly' }).click();
+    await shot('spark-expanded');
+    await page.keyboard.press('Escape');
   });
 
   await step('overview: custom period with explicit dates', async () => {
@@ -371,6 +387,117 @@ export async function runFlows({ page, base, step, shots, newPage }) {
     await expectVisible(page.getByRole('dialog'), 'expanded leads chart dialog');
     await page.keyboard.press('Escape');
     await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 4000 });
+  });
+
+  // Chart inventory: every expandable chart (card expand buttons and clickable KPI sparklines) found on the
+  // analytics pages is opened and exercised. The inventory is collected from the DOM, so a new chart is tested
+  // without being listed here. Repeated table sparklines (one per row) are sampled.
+  const CHART_PAGES = [
+    '/combined',
+    '/overview?platform=meta',
+    '/overview?platform=google',
+    '/campaigns/meta-c1?platform=meta',
+    '/campaigns?platform=meta',
+    '/ads/meta-c1-g1-a1?platform=meta',
+    '/ads/google-c1-g1-a1?platform=google',
+    '/sales?platform=meta',
+    '/leads?platform=meta',
+    '/leads?platform=google',
+    '/attribution',
+    '/compare?platform=meta',
+    '/recommendations',
+    'rec-detail',
+  ];
+  const TRIGGERS = 'main button[aria-label^="Expand chart: "], main [data-spark-trigger]';
+  const TABLE_SAMPLE = 3;
+  const inventory = [];
+  const validatePdf = (buf, what) => {
+    const text = buf.toString('latin1');
+    expect(buf.length > 4000, `${what}: PDF too small (${buf.length} bytes)`);
+    expect(text.startsWith('%PDF-'), `${what}: not a PDF`);
+    expect(/%%EOF\s*$/.test(text), `${what}: PDF is truncated`);
+    expect(/\/Type\s*\/Page\b/.test(text), `${what}: PDF has no page`);
+    expect(!/\[\s*\d[\d.\s]*\]\s+[\d.]+\s+d\b/.test(text), `${what}: PDF chart has dashed strokes`);
+  };
+  for (const path of CHART_PAGES) {
+    let url = path;
+    await step(`chart inventory: ${path}`, async () => {
+      if (path === 'rec-detail') {
+        await go('/recommendations');
+        await page.locator('[data-testid="rec-detail-link"]').first().click();
+        await page.waitForURL(/recommendations[/].+/);
+        url = new URL(page.url()).pathname + new URL(page.url()).search;
+      } else await go(path);
+      await page.waitForTimeout(300);
+    });
+    const labels = await page.locator(TRIGGERS).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''));
+    const inTable = await page.locator(TRIGGERS).evaluateAll((els) => els.map((e) => Boolean(e.closest('table'))));
+    let tableSeen = 0;
+    for (let i = 0; i < labels.length; i++) {
+      if (inTable[i] && ++tableSeen > TABLE_SAMPLE) continue;
+      const title = labels[i].replace(/^(Expand|Open) chart: /, '');
+      const kind = labels[i].startsWith('Open') ? 'sparkline' : 'card';
+      const entry = { page: url, title, kind, series: 0, monthly: false, metrics: 0, pdf: false };
+      inventory.push(entry);
+      await step(`chart ${url} [${kind}] ${title}`, async () => {
+        if (await page.getByRole('dialog').count()) await page.keyboard.press('Escape');
+        const trigger = page.locator(TRIGGERS).nth(i);
+        await trigger.scrollIntoViewIfNeeded();
+        await trigger.click();
+        const dialog = page.getByRole('dialog');
+        await expectVisible(dialog, 'chart dialog');
+        expect((await dialog.getAttribute('aria-label')) === title, `dialog title "${await dialog.getAttribute('aria-label')}" != "${title}"`);
+        const plot = dialog.locator('svg.recharts-surface');
+        await expectVisible(plot, 'dialog chart');
+        const pills = dialog.locator('[aria-label="Legend"] button[aria-pressed]');
+        entry.series = await pills.count();
+        expect(entry.series >= 1, 'no legend series');
+        if (entry.series >= 2) {
+          await pills.first().click();
+          expect((await pills.first().getAttribute('aria-pressed')) === 'false', 'legend pill did not hide its series');
+          await pills.first().click();
+          expect((await pills.first().getAttribute('aria-pressed')) === 'true', 'legend pill did not restore its series');
+        }
+        const gran = dialog.getByRole('group', { name: 'Show chart by day or month' });
+        if (await gran.count()) {
+          entry.monthly = true;
+          await gran.getByRole('button', { name: 'Monthly' }).click();
+          await expectVisible(gran.getByRole('button', { name: 'Monthly', pressed: true }), 'Monthly pressed');
+          await expectVisible(plot, 'monthly chart');
+          await gran.getByRole('button', { name: 'Daily' }).click();
+          await expectVisible(gran.getByRole('button', { name: 'Daily', pressed: true }), 'Daily pressed');
+        }
+        const select = dialog.locator('select');
+        if (await select.count()) {
+          const opts = await select.first().locator('option').evaluateAll((o) => o.map((x) => x.value));
+          entry.metrics = opts.length;
+          if (opts.length > 1) {
+            await select.first().selectOption(opts[1]);
+            await expectVisible(plot, 'chart after metric switch');
+            await select.first().selectOption(opts[0]);
+          }
+        }
+        await expectVisible(dialog.getByText('How it is calculated'), 'calculation explanation');
+        const [download] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), dialog.getByRole('button', { name: 'Save PDF' }).click()]);
+        validatePdf(await readFile(await download.path()), 'Save PDF');
+        entry.pdf = true;
+        await page.keyboard.press('Escape');
+        await dialog.waitFor({ state: 'detached', timeout: 4000 });
+        await trigger.click();
+        await expectVisible(dialog, 'reopened dialog');
+        await dialog.getByRole('button', { name: 'Close', exact: true }).last().click();
+        await dialog.waitFor({ state: 'detached', timeout: 4000 });
+      });
+    }
+  }
+  await step('chart inventory: summary', async () => {
+    const sparks = inventory.filter((c) => c.kind === 'sparkline').length;
+    console.log(`chart inventory: ${inventory.length} charts (${inventory.length - sparks} cards, ${sparks} sparklines) on ${CHART_PAGES.length} pages`);
+    if (process.env.CHART_INVENTORY) {
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(process.env.CHART_INVENTORY, JSON.stringify(inventory, null, 2));
+    }
+    expect(inventory.length >= 60, `only ${inventory.length} charts found`);
   });
 
   await step('screenshots: analytics pages', async () => {

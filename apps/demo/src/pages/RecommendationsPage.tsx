@@ -75,7 +75,7 @@ function RecCard({ rec, spark, onDismiss, onRestore, dismissed }: { rec: Recomme
         ))}
       </ul>
 
-      <div className="mt-3">{spark ? <RecSpark data={spark} label={`${rec.entityName} trend, this period against the previous period`} /> : null}</div>
+      <div className="mt-3">{spark ? <RecSpark data={spark} label={`${rec.entityName} trend, this period against the previous period`} title={`${rec.entityName}: 7-day rolling ${spark.metric.toUpperCase()}`} /> : null}</div>
 
       <p className="mt-3 text-sm leading-snug text-ink-2">{rec.explanation}</p>
       <div className="mt-3 rounded-lg bg-brand-soft/70 px-3 py-2 text-sm leading-snug text-blue-950">

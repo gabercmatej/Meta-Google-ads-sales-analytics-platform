@@ -15,6 +15,8 @@ export interface ChartRenderOptions {
   fixedWidth?: number;
   /** Selected metric when the card offers several (see `metrics`). */
   metric?: string;
+  /** Daily or monthly buckets for this rendering. */
+  granularity: Granularity;
 }
 
 export interface ChartCardProps {
@@ -36,6 +38,14 @@ export interface ChartCardProps {
   howCalculated?: string;
   /** Scope line after the period; defaults to the selected platform. */
   scope?: string;
+  /**
+   * "spark": no card chrome; `trigger` (a KPI sparkline) is rendered as one button that opens the same
+   * dialog. The dialog then has its own Daily/Monthly switch (the sparkline itself stays daily).
+   */
+  variant?: 'card' | 'spark';
+  trigger?: ReactNode;
+  /** Monthly view unavailable (e.g. a ratio without numerator/denominator); shown instead of the toggle. */
+  monthlyUnavailable?: string;
 }
 
 const GRANULARITY: readonly { value: Granularity; label: string }[] = [
@@ -55,8 +65,10 @@ function Glyph({ d }: { d: string }) {
   );
 }
 
-function GranularityToggle({ className = '' }: { className?: string }) {
-  const { granularity, setGranularity } = useAppState();
+function GranularityToggle({ className = '', value, onChange }: { className?: string; value?: Granularity; onChange?: (g: Granularity) => void }) {
+  const app = useAppState();
+  const granularity = value ?? app.granularity;
+  const setGranularity = onChange ?? app.setGranularity;
   return (
     <div role="group" aria-label="Show chart by day or month" className={`inline-flex shrink-0 gap-0.5 rounded-lg bg-slate-100 p-0.5 ring-1 ring-inset ring-slate-200/70 ${className}`} data-testid="granularity-toggle">
       {GRANULARITY.map((g) => (
@@ -68,9 +80,16 @@ function GranularityToggle({ className = '' }: { className?: string }) {
   );
 }
 
+/** Clicks on these never open the dialog (they have their own action). */
+const INTERACTIVE = 'button,a,input,select,textarea,label,[role="button"],[role="tooltip"]';
+
 /** Chart card as in the product: title + period total, period line, Daily/Monthly, expand and print icons. */
 export function ChartCard(props: ChartCardProps) {
-  const { granularity, range, platform } = useAppState();
+  const app = useAppState();
+  const { range, platform } = app;
+  const spark = props.variant === 'spark';
+  const [ownGranularity, setOwnGranularity] = useState<Granularity>('daily');
+  const granularity: Granularity = spark ? (props.monthlyUnavailable ? 'daily' : ownGranularity) : app.granularity;
   const [expanded, setExpanded] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
@@ -156,6 +175,106 @@ export function ChartCard(props: ChartCardProps) {
     }
   };
 
+  const toggle = props.hideGranularity ? null : spark ? (
+    props.monthlyUnavailable ? (
+      <span className="text-xs text-ink-3">{props.monthlyUnavailable}</span>
+    ) : (
+      <GranularityToggle value={ownGranularity} onChange={setOwnGranularity} />
+    )
+  ) : (
+    <GranularityToggle />
+  );
+  /** Click anywhere on the plot opens the dialog; legend pills and other controls keep their own action. */
+  const onSurfaceClick = (e: React.MouseEvent) => {
+    const t = e.target as Element;
+    if (!(e.currentTarget as Element).contains(t) || t.closest(INTERACTIVE)) return;
+    setExpanded(true);
+  };
+
+  const overlays = (models: Partial<Record<string, ChartModel>>) => (
+    <>
+      {expanded &&
+        createPortal(
+          <ChartRoleScope value="dialog">
+            <ChartDialog
+              title={props.title}
+              headline={metricChanged ? null : headline}
+              periodLine={periodText}
+              granularity={toggle}
+              metrics={props.metrics && props.metrics.length > 1 && metric ? { options: props.metrics, value: metric, onChange: setMetric } : undefined}
+              options={options}
+              onOptions={setOptions}
+              canUseBars={!!(models.dialog ?? models.card)?.series.every((s) => (s.kind ?? 'line') === 'line')}
+              showTable={showTable}
+              onShowTable={setShowTable}
+              chart={props.render({ expanded: true, print: false, height: 420, metric, granularity })}
+              table={(models.dialog ?? models.card) ? <ValuesTable model={(models.dialog ?? models.card)!} hidden={hidden} periodHead={periodHead} /> : null}
+              how={how}
+              note={note ? props.note : undefined}
+              bodyRef={bodyRef}
+              busy={busy}
+              status={status}
+              onPrint={() => setPrinting(true)}
+              onPdf={() => void savePdf(models)}
+              onClose={close}
+            />
+          </ChartRoleScope>,
+          document.body,
+        )}
+
+      {printing &&
+        createPortal(
+          <div className="print-sheet" aria-hidden="true">
+            <h2 className="text-xl font-semibold text-black">{props.title}</h2>
+            <p className="mt-1 text-sm text-black">
+              {period} · {scope} · {granLabel}
+            </p>
+            {props.total !== undefined && !metricChanged && (
+              <p className="mt-1 text-sm text-black">
+                {props.totalLabel ?? 'Period total'}: <strong>{props.total}</strong>
+              </p>
+            )}
+            <div className="mt-4">
+              <ChartRoleScope value="print">{props.render({ expanded: true, print: true, height: 420, fixedWidth: 1000, metric: expanded ? metric : defaultMetric, granularity })}</ChartRoleScope>
+            </div>
+            {note}
+            <p className="mt-3 text-xs text-black">How it is calculated: {how}</p>
+            {models.print && <ValuesTable model={models.print} hidden={hidden} periodHead={periodHead} className="print-values mt-3" />}
+            <p className="print-footer mt-4 text-xs text-black">Synthetic demo data</p>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+
+  if (spark) {
+    return (
+      <ChartHostProvider options={options} hidden={hidden} setHidden={setHidden}>
+        <ChartHostConsumer>
+          {(models) => (
+            <>
+              <button
+                type="button"
+                data-spark-trigger
+                className="block h-full w-full cursor-zoom-in rounded-[inherit] text-left transition-colors hover:bg-slate-50/80 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand"
+                aria-label={`Open chart: ${props.title}`}
+                title="Click to enlarge"
+                aria-haspopup="dialog"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded(true);
+                }}
+              >
+                {props.trigger}
+              </button>
+              {overlays(models)}
+            </>
+          )}
+        </ChartHostConsumer>
+      </ChartHostProvider>
+    );
+  }
+
   return (
     <figure className={`card chart-card m-0 flex min-w-0 flex-col ${props.className ?? ''}`}>
       <ChartHostProvider options={options} hidden={hidden} setHidden={setHidden}>
@@ -180,58 +299,11 @@ export function ChartCard(props: ChartCardProps) {
                   </button>
                 </div>
               </div>
-              <div className="chart-pad min-w-0 flex-1 px-4 pb-4 pt-3 sm:px-5">
-                <ChartRoleScope value="card">{props.render({ expanded: false, print: false, height: 280, metric: defaultMetric })}</ChartRoleScope>
+              <div className="chart-pad min-w-0 flex-1 cursor-zoom-in px-4 pb-4 pt-3 sm:px-5" onClick={onSurfaceClick} data-chart-surface title="Click the chart to enlarge">
+                <ChartRoleScope value="card">{props.render({ expanded: false, print: false, height: 280, metric: defaultMetric, granularity })}</ChartRoleScope>
                 {note}
               </div>
-
-              {expanded && (
-                <ChartDialog
-                  title={props.title}
-                  headline={metricChanged ? null : headline}
-                  periodLine={periodText}
-                  granularity={props.hideGranularity ? null : <GranularityToggle />}
-                  metrics={props.metrics && props.metrics.length > 1 && metric ? { options: props.metrics, value: metric, onChange: setMetric } : undefined}
-                  options={options}
-                  onOptions={setOptions}
-                  canUseBars={!!(models.dialog ?? models.card)?.series.every((s) => (s.kind ?? 'line') === 'line')}
-                  showTable={showTable}
-                  onShowTable={setShowTable}
-                  chart={<ChartRoleScope value="dialog">{props.render({ expanded: true, print: false, height: 420, metric })}</ChartRoleScope>}
-                  table={(models.dialog ?? models.card) ? <ValuesTable model={(models.dialog ?? models.card)!} hidden={hidden} periodHead={periodHead} /> : null}
-                  how={how}
-                  note={note ? props.note : undefined}
-                  bodyRef={bodyRef}
-                  busy={busy}
-                  status={status}
-                  onPrint={() => setPrinting(true)}
-                  onPdf={() => void savePdf(models)}
-                  onClose={close}
-                />
-              )}
-
-              {printing &&
-                createPortal(
-                  <div className="print-sheet" aria-hidden="true">
-                    <h2 className="text-xl font-semibold text-black">{props.title}</h2>
-                    <p className="mt-1 text-sm text-black">
-                      {period} · {scope} · {granLabel}
-                    </p>
-                    {props.total !== undefined && (
-                      <p className="mt-1 text-sm text-black">
-                        {props.totalLabel ?? 'Period total'}: <strong>{props.total}</strong>
-                      </p>
-                    )}
-                    <div className="mt-4">
-                      <ChartRoleScope value="print">{props.render({ expanded: true, print: true, height: 420, fixedWidth: 1000, metric: defaultMetric })}</ChartRoleScope>
-                    </div>
-                    {note}
-                    <p className="mt-3 text-xs text-black">How it is calculated: {how}</p>
-                    {models.print && <ValuesTable model={models.print} hidden={hidden} periodHead={periodHead} className="print-values mt-3" />}
-                    <p className="print-footer mt-4 text-xs text-black">Synthetic demo data</p>
-                  </div>,
-                  document.body,
-                )}
+              {overlays(models)}
             </>
           )}
         </ChartHostConsumer>

@@ -5,7 +5,7 @@ import { PeriodBar } from '../components/PeriodBar';
 import { ChartCard } from '../components/charts/ChartCard';
 import { StackedBar, TimeSeriesChart, type ChartRow, type ChartSeries } from '../components/charts/TimeSeriesChart';
 import { Spark } from '../components/OverviewCharts';
-import { COLOR, SHAPES } from '../components/charts/colors';
+import { COLOR, GOOGLE_METRIC_COLOR, METRIC_COLOR, SHAPES } from '../components/charts/colors';
 import { Collapsible, InfoLine, Pill, td, tdr, th, thr } from '../components/ResultsParts';
 import { PLATFORM_LABELS, useAppState } from '../state/AppState';
 import { getDataset } from '../lib/data';
@@ -115,7 +115,9 @@ export default function LeadsPage() {
   const roas = data.revenueMinor > 0 ? ratioOrNull(data.revenueMinor, data.spendMinor) : null;
   const cpl = own.cplMinor;
   const comparison = data.prev ? `vs ${dateRange(data.prev)}` : undefined;
-  const sparkOf = (pick: (d: (typeof daily)[number]) => number | null) => <Spark values={daily.map(pick)} color={wsColor} label="Daily trend" />;
+  const sparkOf = (pick: (d: (typeof daily)[number]) => number | null, title: string, color: string, format: 'money' | 'count') => (
+    <Spark values={daily.map(pick)} dates={daily.map((x) => x.key)} color={color} format={format} label="Daily trend" title={title} />
+  );
   const noLeads = total === 0;
 
   const campaignSeries: ChartSeries[] = [
@@ -256,12 +258,12 @@ export default function LeadsPage() {
         description={`Leads and the paid orders verified against them, ${dateRange(range)}.`}
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard size="primary" label="Leads" value={count(total)} delta={{ pct: relChange(total, data.prevCohort ? data.prevCohort.leads.length : null), goodWhen: 'up' }} comparison={comparison} sub={ownLabel} sparkline={sparkOf((x) => x.leads)} state={o.total === 0 && noLeads ? 'ok' : 'ok'} />
-          <KpiCard size="primary" label="Sold leads" value={count(data.sold)} delta={{ pct: relChange(data.sold, data.prevSold), goodWhen: 'up' }} comparison={comparison} sub="Verified lead-id match" sparkline={sparkOf((x) => x.soldLeads)} />
+          <KpiCard size="primary" label="Leads" value={count(total)} delta={{ pct: relChange(total, data.prevCohort ? data.prevCohort.leads.length : null), goodWhen: 'up' }} comparison={comparison} sub={ownLabel} sparkline={sparkOf((x) => x.leads, `${ownLabel} leads`, METRIC_COLOR.leads, 'count')} state={o.total === 0 && noLeads ? 'ok' : 'ok'} />
+          <KpiCard size="primary" label="Sold leads" value={count(data.sold)} delta={{ pct: relChange(data.sold, data.prevSold), goodWhen: 'up' }} comparison={comparison} sub="Verified lead-id match" sparkline={sparkOf((x) => x.soldLeads, 'Sold leads', METRIC_COLOR.paidOrders, 'count')} />
           <KpiCard label="Conversion" value={soldPct === null ? '–' : pct(soldPct, 1)} state={soldPct === null ? 'no_data' : 'ok'} reason="No leads in this period" sub="Sold leads ÷ leads" />
           <KpiCard label="Total revenue (estimate)" value={money(data.revenueMinor)} sub="Paid orders of these leads, incl. VAT" note="Only paid orders carrying the lead's id. Other sales are not added." />
           <KpiCard label="Revenue per lead" value={money(revPerLead === null ? null : Math.round(revPerLead))} state={revPerLead === null ? 'no_data' : 'ok'} reason="No leads in this period" />
-          <KpiCard label="Spend (lead campaigns)" value={money(data.spendMinor)} state={data.spendMinor === null ? 'no_data' : 'ok'} reason="No ad spend data for these campaigns" sub="Campaigns with leads in the period" sparkline={sparkOf((x) => x.spendMinor)} />
+          <KpiCard label="Spend (lead campaigns)" value={money(data.spendMinor)} state={data.spendMinor === null ? 'no_data' : 'ok'} reason="No ad spend data for these campaigns" sub="Campaigns with leads in the period" sparkline={sparkOf((x) => x.spendMinor, 'Spend (lead campaigns)', isMeta ? METRIC_COLOR.spend : GOOGLE_METRIC_COLOR.spend, 'money')} />
           <KpiCard label="Cost per customer" value={money(costPerCustomer)} state={costPerCustomer === null ? 'no_data' : 'ok'} reason="No paying customers from these leads" />
           <KpiCard label="Estimated ROAS" value={roas === null ? '–' : multiple(roas)} state={roas === null ? 'no_calc' : 'ok'} reason="Needs spend and verified revenue; none is verified here" note="Revenue verified through lead ids ÷ spend of the lead campaigns. Unlinked sales get no ROAS." />
         </div>
