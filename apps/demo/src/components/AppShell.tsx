@@ -19,6 +19,8 @@ function useUrlSync() {
   const loc = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
+    // "/" only redirects (RootRedirect); syncing here would replace that redirect with "/?…" and leave the page empty.
+    if (loc.pathname === '/') return;
     const q = new URLSearchParams(loc.search);
     q.set('platform', platform);
     q.set('period', period.preset);

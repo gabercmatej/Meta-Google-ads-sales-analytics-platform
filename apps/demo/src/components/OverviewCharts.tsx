@@ -43,7 +43,7 @@ export function MetricChart({ metric: metricIn, height, fixedWidth, kind, view }
   const f = METRIC_FORMAT[metric];
   const rows = useMemo(() => (range ? platformRows(metricSeries(getDataset(), { metric, range, granularity })) : []), [metric, range, granularity]);
   const series = useMemo(() => platformDefs(platform, f.value, { kind }), [platform, f.value, kind]);
-  return <TimeSeriesChart data={rows} series={series} yFormat={f.axis} height={height} fixedWidth={fixedWidth} ariaLabel={`${f.label} by ${granularity === 'daily' ? 'day' : 'month'}`} />;
+  return <TimeSeriesChart data={rows} series={series} yFormat={f.axis} height={height} fixedWidth={fixedWidth} ariaLabel={`${f.label} by ${granularity === 'daily' ? 'day' : granularity === 'weekly' ? 'week' : 'month'}`} />;
 }
 
 function salesRowsFor(platform: PlatformView, rows: ReturnType<typeof salesSeries>): { data: ChartRow[]; series: ChartSeries[]; note?: string } {
@@ -115,7 +115,7 @@ export function RoasChart({ height, fixedWidth, view }: BodyProps) {
       yFormat={(v) => multiple(v, 1)}
       height={height}
       fixedWidth={fixedWidth}
-      ariaLabel={`Attributable ROAS by ${granularity === 'daily' ? 'day' : 'month'}`}
+      ariaLabel={`Attributable ROAS by ${granularity === 'daily' ? 'day' : granularity === 'weekly' ? 'week' : 'month'}`}
       tooltipNote="Verified attributed revenue ÷ spend. Ratios are computed from sums, never averaged."
     />
   );
@@ -138,7 +138,7 @@ export function SurplusChart({ height, fixedWidth, view }: BodyProps) {
       yFormat={moneyAxis}
       height={height}
       fixedWidth={fixedWidth}
-      ariaLabel={`Advertising surplus by ${granularity === 'daily' ? 'day' : 'month'}`}
+      ariaLabel={`Advertising surplus by ${granularity === 'daily' ? 'day' : granularity === 'weekly' ? 'week' : 'month'}`}
       tooltipNote={SURPLUS_NOTE}
     />
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entityPerformance, performanceTotals, resolveShowcaseRange } from '@sedem-ads/analytics-core';
+import { entityPerformance, metricSeries, performanceTotals, resolveShowcaseRange } from '@sedem-ads/analytics-core';
 import { getDataset } from '../src/lib/data';
 import { answerQuestion, ASSISTANT_LABEL, INTENT_EXAMPLES, SUGGESTED_QUESTIONS } from '../src/ai/engine';
 import { count, money } from '../src/lib/format';
@@ -20,7 +20,7 @@ const PHRASINGS: Record<string, string[]> = {
   creative_fatigue: ['is there ad fatigue', 'which creatives are tired'],
   top_ads_ctr: ['top ads by ctr', 'which ads have the best click-through rate'],
   budget_realloc: ['should I reallocate budget', 'where to shift budget'],
-  lead_trend: ['lead trend', 'are leads going up or down'],
+  lead_trend: ['lead trend', 'are leads going up or down', 'show leads week over week', 'leads by week'],
   sales_by_source: ['sales by source', 'which source brings the most revenue'],
   attributable_roas: ['what is roas', 'attributable roas'],
   surplus: ['advertising surplus', 'is there a surplus'],
@@ -115,6 +115,36 @@ describe('assistant intents', () => {
     const help = ask('What can you do?').text.toLowerCase();
     expect(help).not.toMatch(/fine-?tuned|trained on/);
     expect(help).toMatch(/do not run a language model|no language model/);
+  });
+});
+
+describe('assistant weekly explanation', () => {
+  it('lead trend lists ISO weeks equal to the weekly chart buckets, flags partial weeks and stays grounded', () => {
+    const a = ask('Show leads week over week');
+    expect(a.intent).toBe('lead_trend');
+    const weeks = metricSeries(ds, { metric: 'leads', range, granularity: 'weekly' });
+    const rows = a.sections.rows.filter((r) => r.label.startsWith('Week '));
+    expect(rows.length).toBe(Math.min(8, weeks.length));
+    for (const w of weeks.slice(-rows.length)) {
+      const row = rows.find((r) => r.label.startsWith(`Week ${w.label}`))!;
+      expect(row, w.label).toBeTruthy();
+      expect(row.value).toBe(w.total === null ? 'no data' : count(w.total));
+      expect(row.label.includes('partial'), w.label).toBe(w.incomplete);
+    }
+    // last30 = Mon 12 Oct – Tue 10 Nov: the first week is full, the last one is cut by the period end.
+    expect(range).toEqual({ start: '2026-10-12', end: '2026-11-10' });
+    expect(weeks[0]!.incomplete).toBe(false);
+    expect(weeks.at(-1)!.incomplete).toBe(true);
+    expect(a.sections.summary).not.toContain(weeks.at(-1)!.label);
+    expect(a.sections.evidence.join(' ')).toMatch(/ISO weeks Monday–Sunday/);
+    expect(a.trace.grounding.grounded, a.trace.grounding.ungrounded.join(',')).toBe(true);
+  });
+
+  it('a period shorter than 14 days gets no weekly rows', () => {
+    const short = resolveShowcaseRange(ds, 'last7')!;
+    const a = ask('Show leads week over week', { platform: 'combined', range: short, periodLabel: 'Last 7 days' });
+    expect(a.sections.rows.some((r) => r.label.startsWith('Week '))).toBe(false);
+    expect(a.sections.evidence.join(' ')).toMatch(/shorter than 14 days/);
   });
 });
 

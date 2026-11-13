@@ -3,6 +3,7 @@
 // legend, tooltips, values table, Print and Save PDF).
 import { useId, useMemo } from 'react';
 import { useAppState } from '../../state/AppState';
+import { periodKey } from '@sedem-ads/analytics-core';
 import { count, countAxis, money, moneyAxis, multiple, pct, periodLabel } from '../../lib/format';
 import { ChartCard } from './ChartCard';
 import { TimeSeriesChart, type ChartRow } from './TimeSeriesChart';
@@ -113,14 +114,14 @@ function daysInMonth(ym: string): number {
   return new Date(Date.UTC(y!, m!, 0)).getUTCDate();
 }
 
-/** Daily rows, or monthly rows where sums add up and ratios are sum(num) / sum(den). */
-export function sparkRows(dates: readonly string[], values: readonly (number | null)[], agg: SparkAgg, granularity: 'daily' | 'monthly'): ChartRow[] {
+/** Daily rows, or ISO-week / monthly rows where sums add up and ratios are sum(num) / sum(den). */
+export function sparkRows(dates: readonly string[], values: readonly (number | null)[], agg: SparkAgg, granularity: 'daily' | 'weekly' | 'monthly'): ChartRow[] {
   if (granularity === 'daily' || agg.kind === 'none') {
     return dates.map((d, i) => ({ key: d, label: periodLabel(d), value: finite(values[i]) ? values[i] : null }));
   }
   const months = new Map<string, { idx: number[] }>();
   dates.forEach((d, i) => {
-    const k = d.slice(0, 7);
+    const k = periodKey(d, granularity);
     if (!months.has(k)) months.set(k, { idx: [] });
     months.get(k)!.idx.push(i);
   });
@@ -144,7 +145,7 @@ export function sparkRows(dates: readonly string[], values: readonly (number | n
       }
       value = any && den > 0 ? (num / den) * (agg.scale ?? 1) : null;
     }
-    return { key: k, label: periodLabel(k), value, incomplete: idx.length < daysInMonth(k) || covered < idx.length };
+    return { key: k, label: periodLabel(k), value, incomplete: idx.length < (granularity === 'weekly' ? 7 : daysInMonth(k)) || covered < idx.length };
   });
 }
 
@@ -177,9 +178,9 @@ export function Spark(props: SparkProps) {
   if (!range || props.values.filter(finite).length < 2) return line;
   const how =
     agg.kind === 'sum'
-      ? 'Monthly values are the sum of the days in the month that have data.'
+      ? 'Weekly (Monday to Sunday) and monthly values are the sum of the days in the week or month that have data.'
       : agg.kind === 'ratio'
-        ? 'Monthly values are recomputed from the summed numerator and denominator of the month, not averaged from daily ratios.'
+        ? 'Weekly and monthly values are recomputed from the summed numerator and denominator of the period, not averaged from daily ratios.'
         : 'Daily values only.';
   return (
     <ChartCard
@@ -196,7 +197,7 @@ export function Spark(props: SparkProps) {
           yFormat={fmt.axis}
           height={o.height}
           fixedWidth={o.fixedWidth}
-          ariaLabel={`${title} by ${o.granularity === 'daily' ? 'day' : 'month'}`}
+          ariaLabel={`${title} by ${o.granularity === 'daily' ? 'day' : o.granularity === 'weekly' ? 'week' : 'month'}`}
         />
       )}
     />

@@ -11,9 +11,10 @@ import {
   assertRange,
   enumerateDays,
   inRange,
-  monthKey,
-  monthKeysInRange,
-  monthSlice,
+  type PeriodGrouping,
+  periodKey,
+  periodKeysInRange,
+  periodSlice,
   rangeLength,
 } from './dates.js';
 import { safeRatio } from './metrics.js';
@@ -26,9 +27,9 @@ export interface MetricCoverage {
 }
 
 export interface MonthBucket {
-  /** 'YYYY-MM'. */
+  /** 'YYYY-MM' (monthly) or ISO week 'YYYY-Www' (weekly, from aggregateByPeriod). */
   month: string;
-  /** The slice of the month inside the requested range. */
+  /** The slice of the month (or week) inside the requested range. */
   range: DateRange;
   expectedDays: number;
   /** Days that have a row at all. */
@@ -62,10 +63,20 @@ export function aggregateMonthly(
   range: DateRange,
   metrics: readonly string[],
 ): MonthBucket[] {
+  return aggregateByPeriod(rows, range, metrics, 'monthly');
+}
+
+/** Calendar-month or ISO-week (Monday to Sunday) buckets with the same coverage rules. */
+export function aggregateByPeriod(
+  rows: readonly DailyRow[],
+  range: DateRange,
+  metrics: readonly string[],
+  grouping: PeriodGrouping,
+): MonthBucket[] {
   const byDate = indexRows(rows, range);
   const buckets: MonthBucket[] = [];
-  for (const month of monthKeysInRange(range)) {
-    const slice = monthSlice(month, range);
+  for (const month of periodKeysInRange(range, grouping)) {
+    const slice = periodSlice(month, range, grouping);
     if (!slice) continue;
     const days = enumerateDays(slice);
     const missingDates: ISODate[] = [];
@@ -142,16 +153,18 @@ export function seriesWithGaps(rows: readonly DailyRow[], range: DateRange, metr
 }
 
 /**
- * Daily/Monthly grouping for chart series. Monthly points sum the days that have a value; a
- * month with no value on any day stays a null gap, and a month with some missing days is
- * flagged `partial` so the chart can style it instead of pretending it is complete.
+ * Daily/Weekly/Monthly grouping for chart series. Weekly (ISO, Monday to Sunday) and monthly
+ * points sum the days that have a value; a bucket with no value on any day stays a null gap,
+ * and a bucket with some missing days is flagged `partial` so the chart can style it instead of
+ * pretending it is complete. Only the days passed in are expected, so a week cut by the range
+ * edge counts its in-range days only.
  */
-export function groupSeries(daily: readonly SeriesPoint[], grouping: 'daily' | 'monthly'): SeriesPoint[] {
+export function groupSeries(daily: readonly SeriesPoint[], grouping: 'daily' | PeriodGrouping): SeriesPoint[] {
   if (grouping === 'daily') return daily.map((p) => ({ ...p }));
   const order: string[] = [];
   const acc = new Map<string, { sum: number; present: number; expected: number }>();
   for (const p of daily) {
-    const key = monthKey(p.key);
+    const key = periodKey(p.key, grouping);
     let a = acc.get(key);
     if (!a) {
       a = { sum: 0, present: 0, expected: 0 };
@@ -177,15 +190,15 @@ export function groupSeries(daily: readonly SeriesPoint[], grouping: 'daily' | '
 
 /**
  * Ratio series (e.g. CTR) built from ratio-of-sums. Daily points are the daily ratio (null on
- * a zero or missing denominator). Monthly points are sum(num)/sum(den) and are null for
- * partial months unless allowPartial is set.
+ * a zero or missing denominator). Weekly and monthly points are sum(num)/sum(den) and are null
+ * for partial buckets unless allowPartial is set.
  */
 export function ratioSeries(
   rows: readonly DailyRow[],
   range: DateRange,
   numerator: string,
   denominator: string,
-  grouping: 'daily' | 'monthly',
+  grouping: 'daily' | PeriodGrouping,
   options: { allowPartial?: boolean } = {},
 ): SeriesPoint[] {
   if (grouping === 'daily') {
@@ -193,7 +206,7 @@ export function ratioSeries(
     const den = seriesWithGaps(rows, range, denominator);
     return num.map((p, i) => ({ key: p.key, value: safeRatio(p.value, den[i]!.value) }));
   }
-  return aggregateMonthly(rows, range, [numerator, denominator]).map((b) => ({
+  return aggregateByPeriod(rows, range, [numerator, denominator], grouping).map((b) => ({
     key: b.month,
     value: monthlyRatio(b, numerator, denominator, options),
     partial: !b.complete,

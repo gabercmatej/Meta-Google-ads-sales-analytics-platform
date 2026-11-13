@@ -21,6 +21,7 @@ import {
 import { INTENT_EXAMPLES } from './catalog';
 import { MAX_BUDGET_SHIFT, MIN_IMPRESSIONS_FOR_CTR, MIN_LEADS_FOR_CPL, budgetShift, hasCpl, usablePrevious } from './rules';
 import { monthOverMonth } from './periods';
+import { WEEKLY_MIN_DAYS } from '../state/AppState';
 import { matchCampaign } from './rules';
 import type { Body, Ctx, IntentId, KeyRow, Rec } from './types';
 
@@ -327,14 +328,35 @@ function leadTrend(c: Ctx): Body {
   if (prev !== null) rows.push({ label: 'Leads in previous period', value: book.count(prev) }, { label: 'Change', value: book.change(change) });
   if (first !== null && second !== null) rows.push({ label: 'First half of period', value: book.count(first) }, { label: 'Second half of period', value: book.count(second) });
   if (best) rows.push({ label: `Best day (${book.name(best.label)})`, value: book.count(best[key]) });
+  // Weekly view: ISO weeks Monday–Sunday, the same buckets as the Weekly charts. Needs at least 14 days.
+  const weekly = rangeLength(c.period.range) >= WEEKLY_MIN_DAYS
+    ? c.tools.run('metricSeries', { metric: 'leads', range: c.period.range, granularity: 'weekly' }, () => metricSeries(c.ds, { metric: 'leads', range: c.period.range, granularity: 'weekly' }), (r) => `${r.length} weeks`)
+    : [];
+  const shownWeeks = weekly.slice(-WEEKS_SHOWN);
+  for (const w of shownWeeks) rows.push({ label: `Week ${book.name(w.label)}${w.incomplete ? ' (partial or incomplete)' : ''}`, value: w[key] === null ? 'no data' : book.count(w[key]) });
+  const full = weekly.filter((w) => !w.incomplete && w[key] !== null);
+  const [wPrev, wLast] = full.slice(-2);
+  const weekNote = wPrev && wLast ? ` In the last complete week (${book.name(wLast.label)}) there were ${book.count(wLast[key])} leads, ${book.change(safeRatioChange(wLast[key], wPrev[key]))} versus the week before (${book.name(wPrev.label)}).` : '';
   return {
-    summary: cur === null ? 'There is no lead data for this period.' : `${VIEW_LABEL[c.view]} produced ${book.count(cur)} leads in ${book.range(c.period.range)}${change !== null ? `, ${book.change(change)} versus the previous period` : ''}.`,
+    summary: cur === null ? 'There is no lead data for this period.' : `${VIEW_LABEL[c.view]} produced ${book.count(cur)} leads in ${book.range(c.period.range)}${change !== null ? `, ${book.change(change)} versus the previous period` : ''}.${weekNote}`,
     rows,
-    evidence: [periodLine(c), prevR ? `Comparison period: ${book.range(prevR)}.` : noPrev(c), `Tools: performanceTotals and metricSeries (daily leads), ${book.count(points.length)} days with data.`],
+    evidence: [
+      periodLine(c),
+      prevR ? `Comparison period: ${book.range(prevR)}.` : noPrev(c),
+      `Tools: performanceTotals and metricSeries (daily leads), ${book.count(points.length)} days with data.`,
+      weekly.length > 0
+        ? `Weekly rows: metricSeries (weekly leads), ISO weeks Monday–Sunday, same buckets as the Weekly charts${weekly.length > shownWeeks.length ? `; last ${book.count(shownWeeks.length)} of ${book.count(weekly.length)} weeks shown` : ''}.`
+        : `No weekly rows: the period is shorter than ${book.count(WEEKLY_MIN_DAYS)} days.`,
+    ],
     recs: [{ text: 'Open the Leads page for channels and statuses.', to: '/leads' }, { text: 'Ask why CPL changed.', ask: 'Why did CPL rise?' }],
-    limits: ['Counts are platform-reported leads from paid forms. Days without data are skipped, not counted as zero.'],
+    limits: [
+      'Counts are platform-reported leads from paid forms. Days without data are skipped, not counted as zero.',
+      ...(weekly.length > 0 ? ['A week cut by the period edge, or with a missing day, is marked partial and is not used for the week-over-week change.'] : []),
+    ],
   };
 }
+
+const WEEKS_SHOWN = 8;
 
 function leadsOverview_(c: Ctx, range: DateRange): number | null {
   const t = totalsOf(c, c.view, range);
@@ -506,7 +528,7 @@ function monthOverMonthBody(c: Ctx): Body {
       { label: 'CTR last month', value: book.pct(prev.ctr) },
     ],
     evidence: [`This month: ${book.range(mm.current)}. Compared with: ${book.range(mm.previous)} (same number of days). Platform: ${VIEW_LABEL[c.view]}.`, coverage(c, cur)],
-    recs: [{ text: 'Use the Monthly view on Overview for the full monthly chart.', to: '/overview' }],
+    recs: [{ text: 'Use the Weekly or Monthly view on Overview for the full chart.', to: '/overview' }, { text: 'Ask for leads week by week.', ask: 'Show leads week over week' }],
     limits: ['The current month is incomplete, so only the same number of days of the previous month is compared. Ratios come from sums of both periods.'],
   };
 }

@@ -17,10 +17,12 @@ import {
   type ISODate,
   enumerateDays,
   inRange,
-  monthEnd,
-  monthKey,
   monthKeysInRange,
-  monthSlice,
+  periodEnd,
+  periodKey,
+  periodKeysInRange,
+  periodSlice,
+  periodStart,
   previousPeriod,
   rangeLength,
   resolvePreset,
@@ -213,6 +215,28 @@ function indexOf(ds: ShowcaseDataset): Index {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const dayLabel = (d: ISODate): string => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]!}`;
 const monthLabel = (key: string): string => `${MONTHS[Number(key.slice(5, 7)) - 1]!} ${key.slice(0, 4)}`;
+/** ISO week as its Monday-Sunday span, e.g. "3–9 Nov" or "27 Oct–2 Nov". */
+export const weekLabel = (key: string): string => {
+  const from = periodStart(key, 'weekly');
+  const to = periodEnd(key, 'weekly');
+  return from.slice(5, 7) === to.slice(5, 7) ? `${Number(from.slice(8, 10))}–${dayLabel(to)}` : `${dayLabel(from)}–${dayLabel(to)}`;
+};
+const bucketKeyOf = (d: ISODate, g: Granularity): string => (g === 'daily' ? d : periodKey(d, g));
+const bucketKeys = (range: DateRange, g: Granularity): string[] => (g === 'daily' ? enumerateDays(range) : periodKeysInRange(range, g));
+const bucketLabel = (key: string, g: Granularity): string => (g === 'daily' ? dayLabel(key) : g === 'weekly' ? weekLabel(key) : monthLabel(key));
+/**
+ * A week or month is unfinished while it contains the reference date. A week cut by the range edge
+ * (e.g. the first week of "Last 30 days") is also flagged: it holds fewer than 7 days, so it is not
+ * comparable with the full weeks next to it. Months keep their V4.6 rule (calendar months are
+ * expected to be cut by the range).
+ */
+const bucketIncomplete = (key: string, range: DateRange, g: Granularity, referenceDate: ISODate): boolean => {
+  if (g === 'daily') return key >= referenceDate;
+  if (periodEnd(key, g) >= referenceDate) return true;
+  if (g !== 'weekly') return false;
+  const slice = periodSlice(key, range, g);
+  return slice === null || rangeLength(slice) < 7;
+};
 const roundMinor = (x: number | null): number | null => (x === null ? null : Math.round(x));
 
 function metricOf(metric: SeriesMetric, a: Agg | null): number | null {
@@ -354,15 +378,15 @@ export function metricSeries(
       };
     });
   }
-  return monthKeysInRange(range).map((key): PlatformSeriesPoint => {
-    const slice = monthSlice(key, range)!;
+  return periodKeysInRange(range, granularity).map((key): PlatformSeriesPoint => {
+    const slice = periodSlice(key, range, granularity)!;
     const meta = platformAgg(idx, 'meta', slice);
     const google = platformAgg(idx, 'google', slice);
     const both = combinedAgg(idx, slice);
-    const unfinished = monthEnd(key) >= ds.referenceDate;
+    const unfinished = bucketIncomplete(key, range, granularity, ds.referenceDate);
     return {
       key,
-      label: monthLabel(key),
+      label: bucketLabel(key, granularity),
       meta: metricOf(metric, meta.agg),
       google: metricOf(metric, google.agg),
       total: metricOf(metric, both.agg),
@@ -494,8 +518,8 @@ export function adSeries(
       return { key: d, label: dayLabel(d), incomplete: partialDay, values };
     });
   }
-  return monthKeysInRange(range).map((key) => {
-    const slice = monthSlice(key, range)!;
+  return periodKeysInRange(range, granularity).map((key) => {
+    const slice = periodSlice(key, range, granularity)!;
     const values: Record<string, number | null> = {};
     let gap = false;
     for (const id of adIds) {
@@ -513,7 +537,7 @@ export function adSeries(
       const platform = adById.get(id)?.platform;
       if (platform && [...idx.gaps[platform].keys()].some((d) => inRange(d, slice))) gap = true;
     }
-    return { key, label: monthLabel(key), incomplete: monthEnd(key) >= ds.referenceDate || gap || hasPartialDay(idx, 'combined', slice), values };
+    return { key, label: bucketLabel(key, granularity), incomplete: bucketIncomplete(key, range, granularity, ds.referenceDate) || gap || hasPartialDay(idx, 'combined', slice), values };
   });
 }
 
@@ -558,8 +582,8 @@ export function salesSeries(
 ): SalesSeriesPoint[] {
   const idx = indexOf(ds);
   const basis = args.basis ?? 'order';
-  const keyOf = (d: ISODate): string => (args.granularity === 'daily' ? d : monthKey(d));
-  const keys = args.granularity === 'daily' ? enumerateDays(args.range) : monthKeysInRange(args.range);
+  const keyOf = (d: ISODate): string => bucketKeyOf(d, args.granularity);
+  const keys = bucketKeys(args.range, args.granularity);
   const points = new Map<string, SalesSeriesPoint>(
     keys.map((key) => {
       const bySource: Record<string, number> = {};
@@ -568,8 +592,8 @@ export function salesSeries(
         bySource[s] = 0;
         ordersBySource[s] = 0;
       }
-      const incomplete = args.granularity === 'daily' ? key >= ds.referenceDate : monthEnd(key) >= ds.referenceDate;
-      return [key, { key, label: args.granularity === 'daily' ? dayLabel(key) : monthLabel(key), incomplete, bySource, ordersBySource, totalMinor: 0, orders: 0 }];
+      const incomplete = bucketIncomplete(key, args.range, args.granularity, ds.referenceDate);
+      return [key, { key, label: bucketLabel(key, args.granularity), incomplete, bySource, ordersBySource, totalMinor: 0, orders: 0 }];
     }),
   );
   for (const o of ds.orders) {
@@ -680,15 +704,15 @@ export function leadsSeries(
   args: { range: DateRange; view: PlatformView; granularity: Granularity },
 ): LeadsSeriesPoint[] {
   const idx = indexOf(ds);
-  const keyOf = (d: ISODate): string => (args.granularity === 'daily' ? d : monthKey(d));
-  const keys = args.granularity === 'daily' ? enumerateDays(args.range) : monthKeysInRange(args.range);
+  const keyOf = (d: ISODate): string => bucketKeyOf(d, args.granularity);
+  const keys = bucketKeys(args.range, args.granularity);
   const points = new Map<string, LeadsSeriesPoint>(
     keys.map((key) => [
       key,
       {
         key,
-        label: args.granularity === 'daily' ? dayLabel(key) : monthLabel(key),
-        incomplete: args.granularity === 'daily' ? key >= ds.referenceDate : monthEnd(key) >= ds.referenceDate,
+        label: bucketLabel(key, args.granularity),
+        incomplete: bucketIncomplete(key, args.range, args.granularity, ds.referenceDate),
         byChannel: zeroChannels(),
         total: 0,
       },
@@ -765,7 +789,7 @@ export function integrityChecks(ds: ShowcaseDataset, range: DateRange): AuditChe
   const canon = canonicalSpend(idx, range);
   const gapDaysInRange = [...idx.gaps.meta.keys(), ...idx.gaps.google.keys()].filter((d) => inRange(d, range));
 
-  // 1. daily series sums to monthly series
+  // 1. daily series sums to monthly and weekly series
   for (const metric of ['spend', 'impressions', 'clicks', 'leads'] as const) {
     const daily = metricSeries(ds, { metric, range, granularity: 'daily' });
     const monthly = metricSeries(ds, { metric, range, granularity: 'monthly' });
@@ -773,6 +797,10 @@ export function integrityChecks(ds: ShowcaseDataset, range: DateRange): AuditChe
     const ok = (['meta', 'google', 'total'] as const).every((k) => sum(daily, k) === sum(monthly, k));
     if (ok) pass(`series.${metric}.daily_vs_monthly`, `Daily ${metric} adds up to monthly ${metric}`, 'Meta, Google and combined daily points sum to the calendar-month points.', sum(daily, 'total'), sum(monthly, 'total'));
     else fail(`series.${metric}.daily_vs_monthly`, `Daily ${metric} adds up to monthly ${metric}`, 'Daily and monthly series disagree.', sum(daily, 'total'), sum(monthly, 'total'));
+    const weekly = metricSeries(ds, { metric, range, granularity: 'weekly' });
+    const okWeekly = (['meta', 'google', 'total'] as const).every((k) => sum(daily, k) === sum(weekly, k));
+    if (okWeekly) pass(`series.${metric}.daily_vs_weekly`, `Daily ${metric} adds up to weekly ${metric}`, 'Meta, Google and combined daily points sum to the ISO-week points (Monday to Sunday, edge weeks clipped to the range).', sum(daily, 'total'), sum(weekly, 'total'));
+    else fail(`series.${metric}.daily_vs_weekly`, `Daily ${metric} adds up to weekly ${metric}`, 'Daily and weekly series disagree.', sum(daily, 'total'), sum(weekly, 'total'));
   }
 
   // 2. combined = meta + google on complete days

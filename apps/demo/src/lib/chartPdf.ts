@@ -14,7 +14,7 @@ export interface PdfInput {
   to: string;
   periodText: string;
   scope: string;
-  granularity: 'Daily' | 'Monthly';
+  granularity: 'Daily' | 'Weekly' | 'Monthly';
   headline?: string;
   howCalculated: string;
   series: readonly PdfSeries[];
@@ -159,7 +159,7 @@ export async function buildChartPdf(input: PdfInput): Promise<{ blob: Blob; file
     doc.setDrawColor(203, 213, 225);
     doc.setLineWidth(0.3);
     y = M + 13;
-    doc.text(input.granularity === 'Daily' ? 'Day' : 'Month', M, y);
+    doc.text(input.granularity === 'Daily' ? 'Day' : input.granularity === 'Weekly' ? 'Week' : 'Month', M, y);
     input.series.forEach((s, i) => {
       const label = pdfText(s.label);
       doc.text(label.length > 26 ? `${label.slice(0, 25)}.` : label, M + firstW + colW * (i + 1) - 1, y, { align: 'right' });

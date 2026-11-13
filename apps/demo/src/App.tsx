@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { AppStateProvider } from './state/AppState';
 import { SimProvider } from './sim/SimProvider';
@@ -23,6 +23,18 @@ const DataSourcesPage = lazy(() => import('./pages/DataSourcesPage'));
 const ActivityPage = lazy(() => import('./pages/ActivityPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
+/**
+ * Entry point (the README link). Keeps the deep-link query and sends an explicit Meta or Google platform to that
+ * workspace's overview, anything else to the combined overview. Keyed on the location so a replace navigation that
+ * lands on "/" again re-runs the redirect instead of leaving an empty index route.
+ */
+function RootRedirect() {
+  const loc = useLocation();
+  const platform = new URLSearchParams(loc.search).get('platform');
+  const pathname = platform === 'meta' || platform === 'google' ? '/overview' : '/combined';
+  return <Navigate key={loc.key} to={{ pathname, search: loc.search }} replace />;
+}
+
 function page(el: React.ReactNode) {
   return <Suspense fallback={<div className="py-16 text-center text-sm text-ink-3">Loading…</div>}>{el}</Suspense>;
 }
@@ -32,7 +44,7 @@ export const routeObjects = [
     path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/combined" replace /> },
+      { index: true, element: <RootRedirect /> },
       { path: 'overview', element: page(<OverviewPage />) },
       { path: 'combined', element: page(<CombinedOverviewPage />) },
       { path: 'campaigns', element: page(<CampaignsPage />) },

@@ -31,7 +31,7 @@ Columns: **Type** = original → demo; **Series / colours**; **Hover / click / e
 | Chart | Type | Series / colours | Hover / click / expand | Fixed in this release |
 |---|---|---|---|---|
 | Total / Meta / Google spend (spark ×3) | spark → spark | combined slate, Meta blue, Google orange | tooltip in dialog; card click; dialog | colours per platform, monotone + gradient, clickable, monthly sums |
-| Daily spend by platform | multi-line → multi-line | Total black, Meta blue, Google orange; metric selector (5) | tooltip, legend toggles, plot click, expand | — (already matched) |
+| Spend by platform | multi-line → multi-line | Total black, Meta blue, Google orange; metric selector (5) | tooltip, legend toggles, plot click, expand | — (already matched) |
 | Sales by source: orders / revenue | multi-line → multi-line | total, subtotal purple, 6 sources (`SOURCE_COLOR`) | as above | — |
 | Selected-source advertising surplus | +/- bars → +/- bars | green above zero, red below | breakdown strip, MoM tooltip | — |
 | Attributable ROAS: Meta, Google, combined | multi-line → multi-line | combined black, Meta blue, Google orange | as above | — |

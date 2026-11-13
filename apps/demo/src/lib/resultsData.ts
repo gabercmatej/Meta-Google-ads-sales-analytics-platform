@@ -3,7 +3,7 @@
 // name, amount or date: a link exists only where the attribution engine found hard evidence.
 import {
   metricSeries,
-  monthKey,
+  periodKey,
   orderAttributionRows,
   salesOverview,
   sourceFromAttribution,
@@ -48,7 +48,7 @@ export function attributionMap(ds: ShowcaseDataset): Map<string, AttributionResu
   return m;
 }
 
-export const keyOfDay = (day: string, g: Granularity): string => (g === 'daily' ? day : monthKey(day));
+export const keyOfDay = (day: string, g: Granularity): string => (g === 'daily' ? day : periodKey(day, g));
 export function skeleton(ds: ShowcaseDataset, range: DateRange, g: Granularity): { key: string; label: string; incomplete: boolean }[] {
   return metricSeries(ds, { metric: 'spend', range, granularity: g }).map((p) => ({ key: p.key, label: p.label, incomplete: p.incomplete }));
 }

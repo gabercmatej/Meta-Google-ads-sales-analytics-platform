@@ -135,6 +135,63 @@ export function monthSlice(key: string, range: DateRange): DateRange | null {
   return compareDates(start, end) > 0 ? null : { start, end };
 }
 
+/** ISO-8601 week key 'YYYY-Www' (weeks run Monday to Sunday; the week belongs to the year of its Thursday). */
+export function isoWeekKey(date: ISODate): string {
+  const dow = (new Date(toUtcMs(date)).getUTCDay() + 6) % 7; // Monday = 0
+  const thursday = addDays(date, 3 - dow);
+  const year = thursday.slice(0, 4);
+  const week = Math.floor(diffDays(`${year}-01-01`, thursday) / 7) + 1;
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
+/** Monday of an ISO week key. */
+export function isoWeekStart(key: string): ISODate {
+  const m = /^(\d{4})-W(\d{2})$/.exec(key);
+  if (!m) throw new RangeError(`Invalid ISO week key: "${key}"`);
+  const jan4 = `${m[1]}-01-04`; // always in week 1
+  const jan4Dow = (new Date(toUtcMs(jan4)).getUTCDay() + 6) % 7;
+  return addDays(jan4, -jan4Dow + (Number(m[2]) - 1) * 7);
+}
+
+/** Sunday of an ISO week key. */
+export function isoWeekEnd(key: string): ISODate {
+  return addDays(isoWeekStart(key), 6);
+}
+
+/** Grouping of days into calendar buckets for charts. */
+export type PeriodGrouping = 'weekly' | 'monthly';
+
+export function periodKey(date: ISODate, grouping: PeriodGrouping): string {
+  return grouping === 'weekly' ? isoWeekKey(date) : monthKey(date);
+}
+
+export function periodStart(key: string, grouping: PeriodGrouping): ISODate {
+  return grouping === 'weekly' ? isoWeekStart(key) : monthStart(key);
+}
+
+export function periodEnd(key: string, grouping: PeriodGrouping): ISODate {
+  return grouping === 'weekly' ? isoWeekEnd(key) : monthEnd(key);
+}
+
+/** Bucket keys touched by a range, in order. */
+export function periodKeysInRange(range: DateRange, grouping: PeriodGrouping): string[] {
+  const keys: string[] = [];
+  for (const d of enumerateDays(range)) {
+    const k = periodKey(d, grouping);
+    if (keys[keys.length - 1] !== k) keys.push(k);
+  }
+  return keys;
+}
+
+/** The part of a bucket that falls inside the range (inclusive), or null. */
+export function periodSlice(key: string, range: DateRange, grouping: PeriodGrouping): DateRange | null {
+  const first = periodStart(key, grouping);
+  const last = periodEnd(key, grouping);
+  const start = compareDates(first, range.start) > 0 ? first : range.start;
+  const end = compareDates(last, range.end) < 0 ? last : range.end;
+  return compareDates(start, end) > 0 ? null : { start, end };
+}
+
 /** Equal-length window immediately before `range`. */
 export function previousPeriod(range: DateRange): DateRange {
   const n = rangeLength(range);

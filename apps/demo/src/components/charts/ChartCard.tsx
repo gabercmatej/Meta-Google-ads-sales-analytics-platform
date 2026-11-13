@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useAppState, PLATFORM_LABELS } from '../../state/AppState';
 import { dateRange } from '../../lib/format';
 import { saveChartPdf } from '../../lib/chartPdf';
-import type { Granularity } from '@sedem-ads/analytics-core';
+import { rangeLength, type Granularity } from '@sedem-ads/analytics-core';
+import { WEEKLY_MIN_DAYS, effectiveGranularity } from '../../state/AppState';
 import { ChartHostProvider, ChartRoleScope, useChartHost, type ChartModel, type ChartOptions } from './ChartHost';
 import { ChartDialog } from './ChartDialog';
 import { DEFAULT_HOW_CALCULATED, ValuesTable, valueRows } from './ChartValues';
@@ -50,6 +51,7 @@ export interface ChartCardProps {
 
 const GRANULARITY: readonly { value: Granularity; label: string }[] = [
   { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
 ];
 
@@ -69,9 +71,11 @@ function GranularityToggle({ className = '', value, onChange }: { className?: st
   const app = useAppState();
   const granularity = value ?? app.granularity;
   const setGranularity = onChange ?? app.setGranularity;
+  // Weeks only make sense with at least two of them in the range.
+  const weeklyOk = app.range !== null && rangeLength(app.range) >= WEEKLY_MIN_DAYS;
   return (
-    <div role="group" aria-label="Show chart by day or month" className={`inline-flex shrink-0 gap-0.5 rounded-lg bg-slate-100 p-0.5 ring-1 ring-inset ring-slate-200/70 ${className}`} data-testid="granularity-toggle">
-      {GRANULARITY.map((g) => (
+    <div role="group" aria-label="Show chart by day, week or month" className={`inline-flex shrink-0 gap-0.5 rounded-lg bg-slate-100 p-0.5 ring-1 ring-inset ring-slate-200/70 ${className}`} data-testid="granularity-toggle">
+      {GRANULARITY.filter((g) => g.value !== 'weekly' || weeklyOk).map((g) => (
         <button key={g.value} type="button" aria-pressed={granularity === g.value} className={seg(granularity === g.value)} onClick={() => setGranularity(g.value)}>
           {g.label}
         </button>
@@ -89,7 +93,7 @@ export function ChartCard(props: ChartCardProps) {
   const { range, platform } = app;
   const spark = props.variant === 'spark';
   const [ownGranularity, setOwnGranularity] = useState<Granularity>('daily');
-  const granularity: Granularity = spark ? (props.monthlyUnavailable ? 'daily' : ownGranularity) : app.granularity;
+  const granularity: Granularity = spark ? (props.monthlyUnavailable ? 'daily' : effectiveGranularity(ownGranularity, range)) : app.granularity;
   const [expanded, setExpanded] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
@@ -102,7 +106,7 @@ export function ChartCard(props: ChartCardProps) {
   const close = useCallback(() => setExpanded(false), []);
   const period = dateRange(range);
   const scope = props.scope ?? PLATFORM_LABELS[platform];
-  const granLabel = granularity === 'daily' ? 'Daily' : 'Monthly';
+  const granLabel = granularity === 'daily' ? 'Daily' : granularity === 'weekly' ? 'Weekly' : 'Monthly';
   const defaultMetric = props.metrics?.[0]?.value;
   const metricChanged = metric !== undefined && metric !== defaultMetric;
 
@@ -144,7 +148,7 @@ export function ChartCard(props: ChartCardProps) {
     </>
   );
   const how = props.howCalculated ? `${props.howCalculated} ${DEFAULT_HOW_CALCULATED}` : DEFAULT_HOW_CALCULATED;
-  const periodHead = granularity === 'daily' ? 'Day' : 'Month';
+  const periodHead = granularity === 'daily' ? 'Day' : granularity === 'weekly' ? 'Week' : 'Month';
 
   const savePdf = async (models: Partial<Record<string, ChartModel>>) => {
     const model = models.dialog ?? models.card;
@@ -179,7 +183,7 @@ export function ChartCard(props: ChartCardProps) {
     props.monthlyUnavailable ? (
       <span className="text-xs text-ink-3">{props.monthlyUnavailable}</span>
     ) : (
-      <GranularityToggle value={ownGranularity} onChange={setOwnGranularity} />
+      <GranularityToggle value={granularity} onChange={setOwnGranularity} />
     )
   ) : (
     <GranularityToggle />

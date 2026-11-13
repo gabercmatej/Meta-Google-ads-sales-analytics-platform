@@ -3,7 +3,7 @@ import {
   attributionOverview,
   entityPerformance,
   metricSeries,
-  monthKey,
+  periodKey,
   performanceTotals,
   salesOverview,
   type DateRange,
@@ -118,7 +118,7 @@ export function campaignRows(ds: ShowcaseDataset, view: 'meta' | 'google', range
 /** Daily or monthly spend per Meta section (sum of its campaigns; a bucket with no rows stays empty). */
 export function sectionSpendRows(ds: ShowcaseDataset, range: DateRange, granularity: Granularity): ChartRow[] {
   const skeleton = metricSeries(ds, { metric: 'spend', range, granularity });
-  const keyOf = (d: string) => (granularity === 'monthly' ? monthKey(d) : d);
+  const keyOf = (d: string) => (granularity === 'daily' ? d : periodKey(d, granularity));
   const acc = new Map<string, Map<string, number>>();
   for (const r of ds.daily) {
     if (r.platform !== 'meta' || r.date < range.start || r.date > range.end) continue;
@@ -142,7 +142,7 @@ export type GoogleDailyMetric = 'spend' | 'impressions' | 'clicks' | 'conversion
 /** Google daily values for one metric, optionally for a single campaign. */
 export function googleDailyRows(ds: ShowcaseDataset, range: DateRange, granularity: Granularity, metric: GoogleDailyMetric): ChartRow[] {
   const skeleton = metricSeries(ds, { metric: 'spend', range, granularity });
-  const keyOf = (d: string) => (granularity === 'monthly' ? monthKey(d) : d);
+  const keyOf = (d: string) => (granularity === 'daily' ? d : periodKey(d, granularity));
   const acc = new Map<string, number>();
   for (const r of ds.daily) {
     if (r.platform !== 'google' || r.date < range.start || r.date > range.end) continue;

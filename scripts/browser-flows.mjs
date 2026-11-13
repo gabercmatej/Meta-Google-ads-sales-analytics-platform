@@ -48,7 +48,7 @@ export async function runFlows({ page, base, step, shots, newPage }) {
     await shot('google-overview');
     await page.getByRole('group', { name: 'Period' }).getByRole('button', { name: '90 days' }).click();
     await page.waitForURL(/period=last90/);
-    await page.getByRole('group', { name: 'Show chart by day or month' }).first().getByRole('button', { name: 'Monthly' }).click();
+    await page.getByRole('group', { name: 'Show chart by day, week or month' }).first().getByRole('button', { name: 'Monthly' }).click();
     await page.waitForURL(/view=monthly/);
     await channel('meta').click();
     await page.waitForURL(/platform=meta/);
@@ -59,17 +59,40 @@ export async function runFlows({ page, base, step, shots, newPage }) {
 
   await step('screenshots: expanded chart and expanded KPI sparkline', async () => {
     await go('/combined?period=last90');
-    await page.getByRole('button', { name: 'Expand chart: Daily spend by platform' }).click();
-    await expectVisible(page.getByRole('dialog', { name: 'Daily spend by platform' }), 'card dialog');
+    await page.getByRole('button', { name: 'Expand chart: Spend by platform' }).click();
+    await expectVisible(page.getByRole('dialog', { name: 'Spend by platform' }), 'card dialog');
     await shot('chart-expanded');
     await page.keyboard.press('Escape');
     await go('/overview?platform=meta&period=yearToDate');
     await page.locator('main [data-spark-trigger]').first().click();
     const dialog = page.getByRole('dialog');
     await expectVisible(dialog, 'sparkline dialog');
-    await dialog.getByRole('group', { name: 'Show chart by day or month' }).getByRole('button', { name: 'Monthly' }).click();
+    await dialog.getByRole('group', { name: 'Show chart by day, week or month' }).getByRole('button', { name: 'Monthly' }).click();
     await shot('spark-expanded');
     await page.keyboard.press('Escape');
+  });
+
+  await step('charts: Weekly shows ISO weeks (Mon–Sun) and survives a reload', async () => {
+    await go('/combined?period=last30');
+    const gran = page.getByRole('group', { name: 'Show chart by day, week or month' }).first();
+    await gran.getByRole('button', { name: 'Weekly' }).click();
+    await page.waitForURL(/view=weekly/);
+    await expectVisible(gran.getByRole('button', { name: 'Weekly', pressed: true }), 'Weekly pressed');
+    // Last 30 days (12 Oct – 10 Nov) covers five ISO weeks: four full ones and the unfinished week of 10 Nov.
+    const points = async () => page.locator('main [data-chart-plot]').first().getAttribute('aria-label');
+    expect(/\b5 points\b/.test(await points()), `weekly chart: ${await points()}`);
+    await page.reload({ waitUntil: 'networkidle' });
+    await expectVisible(page.getByRole('group', { name: 'Show chart by day, week or month' }).first().getByRole('button', { name: 'Weekly', pressed: true }), 'Weekly kept after reload');
+    // A 7-day range has no room for two weeks: the option disappears and the charts fall back to days.
+    await page.getByRole('group', { name: 'Period' }).getByRole('button', { name: '7 days' }).click();
+    await page.waitForURL(/period=last7/);
+    expect((await page.getByRole('button', { name: 'Weekly' }).count()) === 0, 'Weekly offered for a 7-day range');
+    expect(/\b7 points\b/.test(await points()), `7-day fallback: ${await points()}`);
+    // The README shot uses eight full weeks (Mon 14 Sep – Sun 8 Nov), so no partial week skews the picture.
+    await go('/combined?period=custom&from=2026-09-14&to=2026-11-08&view=weekly');
+    await expectVisible(page.getByRole('group', { name: 'Show chart by day, week or month' }).first().getByRole('button', { name: 'Weekly', pressed: true }), 'Weekly from deep link');
+    expect(/\b8 points\b/.test(await points()), `full-week chart: ${await points()}`);
+    await shot('chart-weekly');
   });
 
   await step('overview: custom period with explicit dates', async () => {
@@ -437,7 +460,7 @@ export async function runFlows({ page, base, step, shots, newPage }) {
       if (inTable[i] && ++tableSeen > TABLE_SAMPLE) continue;
       const title = labels[i].replace(/^(Expand|Open) chart: /, '');
       const kind = labels[i].startsWith('Open') ? 'sparkline' : 'card';
-      const entry = { page: url, title, kind, series: 0, monthly: false, metrics: 0, pdf: false };
+      const entry = { page: url, title, kind, series: 0, monthly: false, weekly: false, metrics: 0, pdf: false };
       inventory.push(entry);
       await step(`chart ${url} [${kind}] ${title}`, async () => {
         if (await page.getByRole('dialog').count()) await page.keyboard.press('Escape');
@@ -458,12 +481,19 @@ export async function runFlows({ page, base, step, shots, newPage }) {
           await pills.first().click();
           expect((await pills.first().getAttribute('aria-pressed')) === 'true', 'legend pill did not restore its series');
         }
-        const gran = dialog.getByRole('group', { name: 'Show chart by day or month' });
+        const gran = dialog.getByRole('group', { name: 'Show chart by day, week or month' });
         if (await gran.count()) {
           entry.monthly = true;
           await gran.getByRole('button', { name: 'Monthly' }).click();
           await expectVisible(gran.getByRole('button', { name: 'Monthly', pressed: true }), 'Monthly pressed');
           await expectVisible(plot, 'monthly chart');
+          const weekly = gran.getByRole('button', { name: 'Weekly' });
+          if (await weekly.count()) {
+            entry.weekly = true;
+            await weekly.click();
+            await expectVisible(gran.getByRole('button', { name: 'Weekly', pressed: true }), 'Weekly pressed');
+            await expectVisible(plot, 'weekly chart');
+          }
           await gran.getByRole('button', { name: 'Daily' }).click();
           await expectVisible(gran.getByRole('button', { name: 'Daily', pressed: true }), 'Daily pressed');
         }
@@ -492,7 +522,8 @@ export async function runFlows({ page, base, step, shots, newPage }) {
   }
   await step('chart inventory: summary', async () => {
     const sparks = inventory.filter((c) => c.kind === 'sparkline').length;
-    console.log(`chart inventory: ${inventory.length} charts (${inventory.length - sparks} cards, ${sparks} sparklines) on ${CHART_PAGES.length} pages`);
+    const weekly = inventory.filter((c) => c.weekly).length;
+    console.log(`chart inventory: ${inventory.length} charts (${inventory.length - sparks} cards, ${sparks} sparklines, ${weekly} with Weekly) on ${CHART_PAGES.length} pages`);
     if (process.env.CHART_INVENTORY) {
       const { writeFile } = await import('node:fs/promises');
       await writeFile(process.env.CHART_INVENTORY, JSON.stringify(inventory, null, 2));

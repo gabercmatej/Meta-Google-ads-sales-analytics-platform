@@ -26,7 +26,8 @@ export const SHOWCASE_HISTORY_START: ISODate = '2024-11-01';
 export const SHOWCASE_SEED = 20261111;
 
 export type PlatformView = 'combined' | Platform;
-export type Granularity = 'daily' | 'monthly';
+/** Chart buckets: calendar days, ISO weeks (Monday to Sunday) or calendar months. */
+export type Granularity = 'daily' | 'weekly' | 'monthly';
 export type ShowcaseEntityStatus = 'ACTIVE' | 'PAUSED';
 export type EntityLevel = 'campaign' | 'ad_group' | 'ad';
 export type GoogleChannel = 'SEARCH' | 'DISPLAY' | 'PERFORMANCE_MAX';
@@ -219,15 +220,15 @@ export interface PerformanceTotals {
 export type SeriesMetric = 'spend' | 'impressions' | 'clicks' | 'leads' | 'ctr' | 'cpc' | 'cpl' | 'cpm';
 
 export interface PlatformSeriesPoint {
-  /** ISO date (daily) or 'YYYY-MM' (monthly, calendar months). */
+  /** ISO date (daily), ISO week 'YYYY-Www' (weekly, Monday to Sunday) or 'YYYY-MM' (monthly, calendar months). */
   key: string;
-  /** Short display label, e.g. "3 Nov" or "Nov 2026". */
+  /** Short display label, e.g. "3 Nov", "3–9 Nov" or "Nov 2026". */
   label: string;
   meta: number | null;
   google: number | null;
   /** Combined value: null unless both platforms have data for the point. Ratios from sums. */
   total: number | null;
-  /** Monthly: some days missing, or the month is not finished (current month). */
+  /** Weekly/monthly: some days missing, or the bucket is not finished; weekly also when the range cuts the week. */
   incomplete: boolean;
   /** Daily only. */
   dayStatus?: DayStatus;

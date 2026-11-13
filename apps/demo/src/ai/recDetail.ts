@@ -1,7 +1,7 @@
 // Supporting numbers for recommendation cards and the detail page. Pure and deterministic: every
 // figure is derived from the synthetic dataset (daily ad facts) or from the same entityPerformance
 // rows the rules used, so the detail page can never disagree with the card.
-import { adSeries, entityPerformance, type DateRange, type EntityPerformanceRow, type PlatformView, type ShowcaseDataset } from '@sedem-ads/analytics-core';
+import { addDays, adSeries, entityPerformance, type DateRange, type EntityPerformanceRow, type PlatformView, type ShowcaseDataset } from '@sedem-ads/analytics-core';
 import { date, money, pct } from '../lib/format';
 import { MIN_LEADS_FOR_CPL } from './rules';
 import type { RecType, Recommendation } from './recommendations';
@@ -110,6 +110,37 @@ export function rollingRatio(num: (number | null)[], den: (number | null)[], win
   });
 }
 
+export const ROLLING_WINDOW = 7;
+
+export interface RollingDaily {
+  /** Days of the range (the lookback days are not shown). */
+  days: string[];
+  cpl: (number | null)[];
+  ctr: (number | null)[];
+  /** Leads / clicks. */
+  leadRate: (number | null)[];
+  /** Leads in the 7 days ending on the day. */
+  leads7: (number | null)[];
+}
+
+/**
+ * 7-day rolling figures for every day of the range. Each window reaches 6 days back before the range
+ * start, so the first week of the range shows full 7-day windows instead of 1-6 day fragments (the
+ * V4.7 first-week fix). Days before the synthetic history are missing, never zero.
+ */
+export function rollingDaily(ds: ShowcaseDataset, rec: Pick<Recommendation, 'level' | 'entityId'>, range: DateRange): RollingDaily {
+  const back = ROLLING_WINDOW - 1;
+  const ext = entityDaily(ds, rec, { start: addDays(range.start, -back), end: range.end });
+  const cut = <T,>(xs: T[]) => xs.slice(back);
+  return {
+    days: cut(ext.days),
+    cpl: cut(rollingRatio(ext.spend, ext.leads, ROLLING_WINDOW)),
+    ctr: cut(rollingRatio(ext.clicks, ext.impressions, ROLLING_WINDOW)),
+    leadRate: cut(rollingRatio(ext.leads, ext.clicks, ROLLING_WINDOW)),
+    leads7: cut(ext.leads.map((_, i) => sum(ext.leads.slice(Math.max(0, i - back), i + 1)))),
+  };
+}
+
 export interface SparkData {
   metric: HeadlineMetric;
   current: (number | null)[];
@@ -119,8 +150,11 @@ export interface SparkData {
 /** Card sparkline: 7-day rolling headline metric for the period and, as a ghost line, the previous period. */
 export function sparkFor(ds: ShowcaseDataset, rec: Recommendation, range: DateRange, previous: DateRange | null): SparkData {
   const metric = headlineMetric(rec.type);
-  const pick = (d: DailyAgg) => (metric === 'cpl' ? rollingRatio(d.spend, d.leads, 7) : rollingRatio(d.clicks, d.impressions, 7));
-  return { metric, current: pick(entityDaily(ds, rec, range)), previous: previous ? pick(entityDaily(ds, rec, previous)) : null };
+  const pick = (r: DateRange) => {
+    const roll = rollingDaily(ds, rec, r);
+    return metric === 'cpl' ? roll.cpl : roll.ctr;
+  };
+  return { metric, current: pick(range), previous: previous ? pick(previous) : null };
 }
 
 export interface Anomaly {

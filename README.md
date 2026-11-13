@@ -14,7 +14,7 @@ Meta Ads and Google Ads performance, verified sales and leads, a grounded AI ass
 
 </div>
 
-![Combined overview: Meta + Google spend, sales by source, attributable ROAS and advertising surplus with Daily/Monthly charts](assets/screenshots/combined-hero.png)
+![Combined overview: Meta + Google spend, sales by source, attributable ROAS and advertising surplus with Daily/Weekly/Monthly charts](assets/screenshots/combined-hero.png)
 
 <sub>Screenshot of the interactive demo. **DEMO DATA — NOT REAL BUSINESS RESULTS.** Campaign names, creatives, numbers and IDs are synthetic.</sub>
 
@@ -103,7 +103,7 @@ The first screen answers three questions: how much are we investing in advertisi
 - **Sales by source** gives each source its own colour and adds a **Meta + Google + Chatbot/AI** subtotal. Partner portal, Other verified, Unknown and Conflicting stay visible and still reconcile to the total.
 - **Advertising surplus** is selected-source revenue minus Meta and Google spend. It is marked *not profit* and has a month-over-month breakdown.
 - **Attributable ROAS** is shown per platform and combined, from verified evidence only, computed from sums and never averaged.
-- **Every chart** has a period total, Daily/Monthly, an expanded view, and print/PDF export with solid lines that stay distinguishable in greyscale.
+- **Every chart** has a period total, Daily/Weekly/Monthly, an expanded view, and print/PDF export with solid lines that stay distinguishable in greyscale.
 
 ![Combined overview, full page: Meta + Google spend, sales by source, attributable ROAS and advertising surplus](assets/screenshots/combined-full.png)
 
@@ -114,12 +114,16 @@ The first screen answers three questions: how much are we investing in advertisi
 
 Each platform overview has the same advertising summary, linked-sales estimate, delivery block and trend charts. A partial period is flagged with the days that have data and the dates that are missing. Chart lines show a gap there instead of dropping to zero.
 
-Every chart and every KPI sparkline opens the same dialog: a larger chart with tooltips and legend toggles, Daily/Monthly (monthly ratios are recomputed from sums), the values table, how it is calculated, and Print / Save PDF. Each KPI has its own colour. The per-chart audit is in [docs/chart-fidelity-audit.md](docs/chart-fidelity-audit.md).
+Every chart and every KPI sparkline opens the same dialog: a larger chart with tooltips and legend toggles, Daily/Weekly/Monthly (weekly and monthly ratios are recomputed from sums), the values table, how it is calculated, and Print / Save PDF. Each KPI has its own colour. The per-chart audit is in [docs/chart-fidelity-audit.md](docs/chart-fidelity-audit.md).
 
 <p>
   <img src="assets/screenshots/chart-expanded.png" alt="Expanded chart: daily spend by platform with legend, metric selector, Daily/Monthly, values and Print / Save PDF" width="49%">
   <img src="assets/screenshots/spark-expanded.png" alt="Expanded KPI sparkline: Meta spend by month with tooltip, how it is calculated and Print / Save PDF" width="49%">
 </p>
+
+**Weekly** is offered when the period has at least 14 days. Weeks are ISO weeks, Monday to Sunday, labelled with their dates. A week that is cut by the period edge or still in progress is marked as partial, so it is not compared like a full week. The choice is kept in the URL (`view=weekly`), and on a shorter period the charts fall back to days.
+
+![Combined overview with the Weekly option: Meta and Google spend per ISO week over eight full weeks, 14 September to 8 November](assets/screenshots/chart-weekly.png)
 
 ## AI assistant
 
@@ -185,6 +189,8 @@ Recommendations are rule-based cards that compare the selected period with the p
 - an explanation
 - a concrete next step
 - links to the campaign, the ad comparison and the assistant
+
+The 7-day rolling CPL and CTR charts on the detail page also look back six days before the period starts. The first days of a period therefore show a full 7-day value, not a ratio over one or two days.
 
 **Prepare change** opens the same confirmation workflow as the Campaigns page. Nothing happens until a person confirms it.
 
@@ -309,7 +315,7 @@ flowchart LR
     direction TB
     SW["Platform switch<br/>Meta Ads · Google Ads · Combined"]
     PER["Period presets<br/>Yesterday … This year · Custom"]
-    GR["Daily / Monthly"]
+    GR["Daily / Weekly / Monthly"]
     ROLE["Role<br/>Viewer · Ad editor · Administrator"]
   end
   SHELL --> OV["Overview<br/>Combined · Meta · Google"]
@@ -326,7 +332,7 @@ flowchart LR
   class AI ai
 ```
 
-The platform switch decides which workspace you are in. Meta Ads and Google Ads are separate workspaces with their own campaigns, charts and recommendations, and **Combined** puts both side by side. Platform, period and Daily/Monthly live in the URL, so every view can be linked. Pages that cover both platforms (Attribution, AI, System) carry a **Meta + Google** marker.
+The platform switch decides which workspace you are in. Meta Ads and Google Ads are separate workspaces with their own campaigns, charts and recommendations, and **Combined** puts both side by side. Platform, period and Daily/Weekly/Monthly live in the URL, so every view can be linked. Pages that cover both platforms (Attribution, AI, System) carry a **Meta + Google** marker.
 
 ```bash
 npm ci

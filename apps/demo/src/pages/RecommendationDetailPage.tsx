@@ -10,7 +10,7 @@ import { ChartCard } from '../components/charts/ChartCard';
 import { TimeSeriesChart, type ChartRow, type ChartSeries } from '../components/charts/TimeSeriesChart';
 import { PrepareChange, useSim } from '../sim/SimProvider';
 import { buildRecommendations, PRIORITY_LABEL, REC_TYPE_LABEL, type RecPriority, type Recommendation } from '../ai/recommendations';
-import { entityDaily, findAnomalies, headlineMetric, narrativeOf, peerTable, rollingRatio, scenarioFor } from '../ai/recDetail';
+import { entityDaily, findAnomalies, headlineMetric, narrativeOf, peerTable, rollingDaily, scenarioFor } from '../ai/recDetail';
 import { getDataset } from '../lib/data';
 import { useAppState } from '../state/AppState';
 import { count, date, dateRange, money, moneyAxis, pct } from '../lib/format';
@@ -43,15 +43,16 @@ export default function RecommendationDetailPage() {
     if (!found || !app.range) return null;
     const { rec, set, view } = found;
     const cur = entityDaily(ds, rec, app.range);
-    const prev = set.previous ? entityDaily(ds, rec, set.previous) : null;
     const metric = headlineMetric(rec.type);
-    const roll = (d: typeof cur) => (metric === 'cpl' ? rollingRatio(d.spend, d.leads, 7) : rollingRatio(d.clicks, d.impressions, 7));
-    const curRoll = roll(cur);
-    const prevRoll = prev ? roll(prev) : null;
-    const actual: ChartRow[] = cur.days.map((d, i) => ({ key: d, label: day(d), cur: curRoll[i] ?? null, prev: prevRoll?.[i] ?? null }));
-    const spendCpl: ChartRow[] = cur.days.map((d, i) => ({ key: d, label: day(d), spend: cur.spend[i] ?? null, cpl: rollingRatio(cur.spend, cur.leads, 7)[i] ?? null }));
-    const leadRate = rollingRatio(cur.leads, cur.clicks, 7);
-    const conv: ChartRow[] = cur.days.map((d, i) => ({ key: d, label: day(d), leads: cur.leads.slice(Math.max(0, i - 6), i + 1).reduce<number>((a, b) => a + (b ?? 0), 0), rate: leadRate[i] ?? null }));
+    // Rolling values reach 6 days back before the period, so the first day already has a full 7-day window.
+    const roll = rollingDaily(ds, rec, app.range);
+    const prevRoll = set.previous ? rollingDaily(ds, rec, set.previous) : null;
+    const pick = (r: typeof roll) => (metric === 'cpl' ? r.cpl : r.ctr);
+    const curLine = pick(roll);
+    const prevLine = prevRoll ? pick(prevRoll) : null;
+    const actual: ChartRow[] = cur.days.map((d, i) => ({ key: d, label: day(d), cur: curLine[i] ?? null, prev: prevLine?.[i] ?? null }));
+    const spendCpl: ChartRow[] = cur.days.map((d, i) => ({ key: d, label: day(d), spend: cur.spend[i] ?? null, cpl: roll.cpl[i] ?? null }));
+    const conv: ChartRow[] = cur.days.map((d, i) => ({ key: d, label: day(d), leads: roll.leads7[i] ?? 0, rate: roll.leadRate[i] ?? null }));
     const row = entityPerformance(ds, { level: rec.level, view, range: app.range }).find((r) => r.id === rec.entityId);
     return {
       metric,

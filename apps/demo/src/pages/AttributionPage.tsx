@@ -33,8 +33,8 @@ const EVIDENCE_LABEL: Record<string, string> = {
 };
 
 const TILE_TEXT: Record<SourceTileKey, { label: string; note: string }> = {
-  meta: { label: 'Meta', note: 'Verified through a lead form id or a Meta click id.' },
-  google: { label: 'Google', note: 'Verified through a stored Google click id.' },
+  meta: { label: 'Meta', note: 'Classified as Meta: hard evidence (lead id or Meta click id) or a Meta source label.' },
+  google: { label: 'Google', note: 'Classified as Google: a stored Google click id or a Google source label.' },
   partner_portal: { label: 'Partner portal', note: 'Orders the partner portal reports under its own id.' },
   chatbot_ai: { label: 'Chatbot/AI', note: 'Orders started in the website assistant.' },
   other_verified: { label: 'Other verified', note: 'Other sources with a hard identifier.' },
@@ -48,6 +48,8 @@ const RULES: readonly { rule: string; why: string; effect: string }[] = [
   { rule: 'Platform-reported conversion counts', why: 'Platforms report totals, not which order they belong to.', effect: 'Shown beside sales, never used to link an order.' },
   { rule: 'Similar date, amount or name', why: 'Coincidences are common and prove nothing.', effect: 'Never used. An unlinked sale stays unlinked.' },
   { rule: 'Evidence for both platforms', why: 'The order carries hard evidence for Meta and Google.', effect: 'Flagged as conflicting and left out of ROAS.' },
+  { rule: 'Repeat order with the customer\'s old label', why: 'The label describes how the customer first arrived, not this purchase.', effect: 'Classified under that label only; a repeat order never becomes verified revenue.' },
+  { rule: 'Chatbot conversation', why: 'A chat is its own channel. It does not prove an ad click.', effect: 'Counted as Chatbot/AI, never as a Meta or Google conversion.' },
 ];
 
 function evidenceChips(r: OrderAttributionRow): { text: string; tone: Tone }[] {
@@ -169,6 +171,11 @@ export default function AttributionPage() {
                 <p className="tabular mt-1 text-[13px] text-ink-2">
                   {money(t.revenueMinor)} <span className="text-ink-3">({share(t.revenueMinor, total)})</span>
                 </p>
+                {(t.key === 'meta' || t.key === 'google') && (
+                  <p className="tabular mt-1 text-xs text-ink-2" data-testid={`tile-${t.key}-verified`}>
+                    {count(t.verifiedOrders)} verified · {money(t.verifiedRevenueMinor)}
+                  </p>
+                )}
                 <p className="mt-1.5 text-xs leading-snug text-ink-3">{meta.note}</p>
               </div>
             );
@@ -180,7 +187,7 @@ export default function AttributionPage() {
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="Verified sources by detailed label" subtitle="The label the customer or operator recorded, with the group it falls into." className="min-w-0">
+        <Card title="Sources by detailed label" subtitle="The label the customer or operator recorded, with the group it falls into. A classification, not proof." className="min-w-0">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse [&_td]:!px-2.5 [&_th]:!px-2.5">
               <thead>

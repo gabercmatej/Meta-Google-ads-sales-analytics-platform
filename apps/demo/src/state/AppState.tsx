@@ -4,6 +4,7 @@ import {
   SHOWCASE_REFERENCE_DATE,
   addDays,
   isValidISODate,
+  rangeLength,
   resolveShowcaseRange,
   type DatePreset,
   type DateRange,
@@ -51,7 +52,15 @@ export const LAST_COMPLETE_DAY: ISODate = addDays(SHOWCASE_REFERENCE_DATE, -1);
 const PLATFORMS: readonly PlatformView[] = ['combined', 'meta', 'google'];
 const PRESETS: readonly DemoPreset[] = ['today', 'yesterday', 'thisWeek', 'last7', 'last14', 'last30', 'last90', 'thisMonth', 'previousMonth', 'yearToDate', 'custom'];
 
-/** Optional deep-link query parameters: ?platform=meta&period=last90&from=2026-01-01&to=2026-03-31&view=monthly */
+/** Weekly charts need at least two weeks in the range; shorter ranges fall back to Daily. */
+export const WEEKLY_MIN_DAYS = 14;
+
+/** Weekly selected on a range too short for it reads as Daily (the choice is kept for longer ranges). */
+export function effectiveGranularity(g: Granularity, range: DateRange | null): Granularity {
+  return g === 'weekly' && (!range || rangeLength(range) < WEEKLY_MIN_DAYS) ? 'daily' : g;
+}
+
+/** Optional deep-link query parameters: ?platform=meta&period=last90&from=2026-01-01&to=2026-03-31&view=monthly (or view=weekly) */
 function initialFromUrl(): { platform: PlatformView; period: PeriodState; granularity: Granularity } {
   const q = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search);
   const platform = PLATFORMS.find((p) => p === q.get('platform')) ?? 'meta';
@@ -59,7 +68,8 @@ function initialFromUrl(): { platform: PlatformView; period: PeriodState; granul
   const from = q.get('from');
   const to = q.get('to');
   const custom = preset === 'custom' && from && to && isValidISODate(from) && isValidISODate(to) && from <= to ? { start: from, end: to } : null;
-  const granularity: Granularity = q.get('view') === 'monthly' ? 'monthly' : 'daily';
+  const view = q.get('view');
+  const granularity: Granularity = view === 'monthly' || view === 'weekly' ? view : 'daily';
   return { platform, period: { preset: custom ? 'custom' : preset === 'custom' ? 'last30' : preset, custom }, granularity };
 }
 
@@ -94,10 +104,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const range = useMemo(() => resolveDemoRange(period), [period]);
+  const shown = effectiveGranularity(granularity, range);
 
   const value = useMemo<AppState>(
-    () => ({ platform, setPlatform, workspace: platform === 'google' ? 'google' : 'meta', period, setPeriod, range, granularity, setGranularity, role, setRole }),
-    [platform, period, setPeriod, range, granularity, role],
+    () => ({ platform, setPlatform, workspace: platform === 'google' ? 'google' : 'meta', period, setPeriod, range, granularity: shown, setGranularity, role, setRole }),
+    [platform, period, setPeriod, range, shown, role],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

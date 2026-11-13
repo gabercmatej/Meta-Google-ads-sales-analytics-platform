@@ -143,7 +143,7 @@ export default function CombinedOverviewPage() {
         </div>
       </section>
 
-      <ChartCard scope="Meta + Google" title="Daily spend by platform" total={money(totalMinor)} totalLabel="Total" note="Total is Meta plus Google on days where both platforms have data; a day without data is left empty, never drawn as zero." metrics={metricOptions('spend')} render={(o) => <MetricChart {...o} metric={o.metric ?? 'spend'} view="combined" />} />
+      <ChartCard scope="Meta + Google" title="Spend by platform" total={money(totalMinor)} totalLabel="Total" note="Total is Meta plus Google on days where both platforms have data; a day without data is left empty, never drawn as zero." metrics={metricOptions('spend')} render={(o) => <MetricChart {...o} metric={o.metric ?? 'spend'} view="combined" />} />
 
       <section className="min-w-0">
         <div className="mb-3.5">

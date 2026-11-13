@@ -1,5 +1,7 @@
 // Display formatting. en-IE locale, EUR. null always renders as "–" (no data), never 0.
 
+import { weekLabel } from '@sedem-ads/analytics-core';
+
 const LOCALE = 'en-IE';
 export const NO_DATA = '–';
 
@@ -80,8 +82,9 @@ export function netOfVat(grossMinor: number | null | undefined, vatRatePercent: 
   return Math.round(grossMinor / (1 + vatRatePercent / 100));
 }
 
-/** "2026-11" -> "Nov 2026", "2026-11-03" -> "3 Nov". Used for chart/table labels. */
+/** "2026-11" -> "Nov 2026", "2026-W45" -> "2–8 Nov", "2026-11-03" -> "3 Nov". Used for chart/table labels. */
 export function periodLabel(key: string): string {
+  if (/^\d{4}-W\d{2}$/.test(key)) return weekLabel(key);
   return key.length === 7 ? date(key) : date(key, { year: false });
 }
 

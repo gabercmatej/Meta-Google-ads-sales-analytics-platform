@@ -14,9 +14,9 @@ afterEach(() => {
   window.history.replaceState({}, '', '/');
 });
 
-function mount() {
-  window.history.replaceState({}, '', '/combined?period=last90');
-  const router = createMemoryRouter([{ path: '/combined', element: <CombinedOverviewPage /> }], { initialEntries: ['/combined?period=last90'] });
+function mount(period = 'last90') {
+  window.history.replaceState({}, '', `/combined?period=${period}`);
+  const router = createMemoryRouter([{ path: '/combined', element: <CombinedOverviewPage /> }], { initialEntries: [`/combined?period=${period}`] });
   render(
     <AppStateProvider>
       <SimProvider>
@@ -27,8 +27,8 @@ function mount() {
 }
 
 const open = () => {
-  fireEvent.click(screen.getByRole('button', { name: 'Expand chart: Daily spend by platform' }));
-  return screen.getByRole('dialog', { name: 'Daily spend by platform' });
+  fireEvent.click(screen.getByRole('button', { name: 'Expand chart: Spend by platform' }));
+  return screen.getByRole('dialog', { name: 'Spend by platform' });
 };
 
 describe('expanded chart dialog', () => {
@@ -48,11 +48,31 @@ describe('expanded chart dialog', () => {
   it('Monthly toggle in the dialog changes granularity', () => {
     mount();
     const dlg = open();
-    const group = within(dlg).getByRole('group', { name: 'Show chart by day or month' });
+    const group = within(dlg).getByRole('group', { name: 'Show chart by day, week or month' });
     expect(within(group).getByRole('button', { name: 'Daily' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(within(group).getByRole('button', { name: 'Monthly' }));
     expect(within(group).getByRole('button', { name: 'Monthly' }).getAttribute('aria-pressed')).toBe('true');
     expect(within(screen.getByRole('dialog')).getAllByRole('columnheader').some((h) => h.textContent === 'Month')).toBe(true);
+  });
+
+  it('Weekly toggle shows Monday-Sunday weeks; the first week of the range is clipped and flagged', () => {
+    mount();
+    const dlg = open();
+    fireEvent.click(within(within(dlg).getByRole('group', { name: 'Show chart by day, week or month' })).getByRole('button', { name: 'Weekly' }));
+    const after = within(screen.getByRole('dialog'));
+    expect(after.getAllByRole('columnheader').some((h) => h.textContent === 'Week')).toBe(true);
+    const firstCells = after.getAllByRole('row').slice(1).map((r) => r.querySelector('th,td')?.textContent ?? '');
+    // Last 90 days starts on Wednesday 12 Aug 2026: its ISO week is 10-16 Aug, clipped to the range.
+    expect(firstCells[0]).toMatch(/^10–16 Aug/);
+    expect(firstCells.some((c) => /^2–8 Nov/.test(c))).toBe(true);
+  });
+
+  it('Weekly is not offered for ranges shorter than 14 days', () => {
+    mount('last7');
+    const dlg = open();
+    const group = within(dlg).getByRole('group', { name: 'Show chart by day, week or month' });
+    expect(within(group).queryByRole('button', { name: 'Weekly' })).toBeNull();
+    expect(within(group).getByRole('button', { name: 'Daily' })).toBeTruthy();
   });
 
   it('legend toggle hides a series everywhere (table column too)', () => {
@@ -108,7 +128,7 @@ describe('PDF export', () => {
     (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => 'blob:x';
     (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => undefined;
     const name = await saveChartPdf({
-      title: 'Daily spend by platform',
+      title: 'Spend by platform',
       from: '2026-08-13',
       to: '2026-11-10',
       periodText: '13 Aug 2026 – 10 Nov 2026',
@@ -119,7 +139,7 @@ describe('PDF export', () => {
       rows: [['2026-11-10', '€10.00']],
       svg: null,
     });
-    expect(name).toBe('Sedem-Ads-Daily-spend-by-platform-2026-08-13-2026-11-10.pdf');
+    expect(name).toBe('Sedem-Ads-Spend-by-platform-2026-08-13-2026-11-10.pdf');
     expect(downloads).toEqual([name]);
     expect(text.mock.calls.some((c) => String(c[0]).includes('Synthetic demo data'))).toBe(true);
     vi.doUnmock('jspdf');

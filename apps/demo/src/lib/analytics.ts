@@ -2,7 +2,7 @@
 import {
   calendarDateInZone,
   metricSeries,
-  monthKey,
+  periodKey,
   orderAttributionRows,
   salesSeries,
   type DateRange,
@@ -104,7 +104,7 @@ interface Bucket {
 
 /** Re-bucket daily facts into the requested granularity; flags/labels come from a matching metricSeries. */
 export function bucketFacts(facts: readonly DayFacts[], skeleton: readonly PlatformSeriesPoint[], granularity: Granularity): Bucket[] {
-  const keyOf = (d: string) => (granularity === 'monthly' ? monthKey(d) : d);
+  const keyOf = (d: string) => (granularity === 'daily' ? d : periodKey(d, granularity));
   const map = new Map<string, Bucket>(
     skeleton.map((p) => [p.key, { key: p.key, label: p.label, incomplete: p.incomplete, spendMeta: null, spendGoogle: null, spendTotal: null, revMeta: 0, revGoogle: 0, revTotalVerified: 0, revSelected: 0, srcMeta: 0, srcGoogle: 0 }]),
   );
@@ -162,7 +162,7 @@ export function campaignSeries(
   args: { campaignId: string; platform: 'meta' | 'google'; metric: 'spend' | 'impressions' | 'clicks' | 'leads' | 'ctr' | 'cpc' | 'cpl'; range: DateRange; granularity: Granularity },
 ): ChartRow[] {
   const skeleton = metricSeries(ds, { metric: 'spend', range: args.range, granularity: args.granularity });
-  const keyOf = (d: string) => (args.granularity === 'monthly' ? monthKey(d) : d);
+  const keyOf = (d: string) => (args.granularity === 'daily' ? d : periodKey(d, args.granularity));
   const acc = new Map<string, { spend: number; impressions: number; clicks: number; leads: number }>();
   for (const r of ds.daily) {
     if (r.campaignId !== args.campaignId || r.date < args.range.start || r.date > args.range.end) continue;

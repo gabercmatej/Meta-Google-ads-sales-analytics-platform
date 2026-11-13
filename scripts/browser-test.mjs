@@ -43,6 +43,24 @@ const PAGES = [
   ['/users', 'Users'],
 ];
 
+// Entry links people actually open: the README demo link (path taken from README.md), the deep link from the
+// blank-page report and one per platform. Each opens in a fresh context, as a visitor arriving from GitHub would.
+const README_PATH = (() => {
+  const m = readFileSync(join(ROOT, 'README.md'), 'utf8').match(/\[[^\]]*Open the interactive demo\]\((https:[^)\s]+)\)/);
+  if (!m) throw new Error('README demo link not found');
+  const u = new URL(m[1]);
+  return u.pathname + u.search;
+})();
+const ENTRY_LINKS = [
+  [README_PATH, '/combined'],
+  ['/?platform=meta&period=last30&view=daily', '/overview'],
+  ['/?platform=google&period=last30&view=daily', '/overview'],
+  ['/?platform=combined&period=last30&view=daily', '/combined'],
+  ['/overview?platform=meta&period=last30&view=daily', '/overview'],
+  ['/overview?platform=google&period=last30&view=daily', '/overview'],
+  ['/combined?period=last30&view=daily', '/combined'],
+];
+
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'phone', width: 390, height: 844, isMobile: true, hasTouch: true },
@@ -138,6 +156,31 @@ async function sweep(browser, base) {
   }
 }
 
+/** A 200 and a visible sidebar are not proof: the main area must show KPI cards and a chart with a drawn series. */
+async function entryLinks(browser, base) {
+  for (const vp of VIEWPORTS) {
+    for (const [path, expected] of ENTRY_LINKS) {
+      const { context, page, problems } = await newPage(browser, base, vp);
+      const label = `${vp.name} entry ${path}`;
+      await page.goto(base + path, { waitUntil: 'networkidle' });
+      await page.locator('main [data-testid="kpi-card"]').first().waitFor({ timeout: 8000 }).catch(() => {});
+      await page.locator('main .recharts-wrapper path[d]').first().waitFor({ state: 'attached', timeout: 8000 }).catch(() => {});
+      const got = await page.evaluate(() => ({
+        path: location.pathname,
+        h1: document.querySelector('main h1')?.textContent ?? '',
+        kpis: document.querySelectorAll('main [data-testid="kpi-card"]').length,
+        series: [...document.querySelectorAll('main .recharts-wrapper .recharts-curve, main .recharts-wrapper .recharts-rectangle, main .recharts-wrapper .recharts-area-area')].filter((el) => (el.getAttribute('d') ?? '').length > 20).length,
+      }));
+      check(got.path === expected, `${label}: lands on ${expected} (got ${got.path})`);
+      check(got.h1.trim().length > 0, `${label}: page heading rendered`);
+      check(got.kpis >= 3, `${label}: KPI cards rendered (${got.kpis})`);
+      check(got.series > 0, `${label}: chart has a drawn data series (${got.series})`);
+      check(problems.length === 0, `${label}: ${problems.join(' | ') || 'clean'}`);
+      await context.close();
+    }
+  }
+}
+
 async function flows(browser, base) {
   const { context, page, problems } = await newPage(browser, base, VIEWPORTS[0]);
   const step = async (label, fn) => {
@@ -162,6 +205,7 @@ const base = process.env.BASE_URL?.replace(/\/$/, '') ?? local.base;
 if (SHOTS) await mkdir(SHOTS, { recursive: true });
 const browser = await launch();
 try {
+  await entryLinks(browser, base);
   await sweep(browser, base);
   await flows(browser, base);
 } finally {

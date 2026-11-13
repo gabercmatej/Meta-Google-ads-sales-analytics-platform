@@ -53,6 +53,12 @@ describe('Sales, Attribution and Combined reconcile', () => {
       expect(a.paidOrders).toBe(c.paidOrders);
       expect(a.paidRevenueMinor).toBe(c.paidRevenueMinor);
       expect(a.verifiedOrders).toBe(c.verified.meta.orders + c.verified.google.orders);
+      // The coverage line counts exactly the verified share shown on the Meta and Google tiles, never the label-only rest.
+      const tile = (k: string) => a.tiles.find((t) => t.key === k)!;
+      expect(tile('meta').verifiedOrders + tile('google').verifiedOrders).toBe(a.verifiedOrders);
+      expect(tile('meta').verifiedOrders).toBe(c.verified.meta.orders);
+      expect(tile('meta').verifiedRevenueMinor).toBe(c.verified.meta.revenueMinor);
+      expect(tile('google').verifiedOrders).toBeLessThanOrEqual(tile('google').orders);
     });
 
     it(`the date basis changes the figures consistently ${r.start}..${r.end}`, () => {

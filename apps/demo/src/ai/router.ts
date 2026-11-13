@@ -43,7 +43,7 @@ const RULES: Rule[] = [
   { intent: 'worst_campaign', name: 'worst-campaign', test: /\b(worst|weakest|poorest|underperform\w*|least efficient|most expensive|highest cpl|struggling|bad)\b.*\bcampaigns?\b|\bcampaigns?\b.*\b(worst|weakest|poorest|underperform\w*|least efficient|most expensive|highest cpl|performing worst)\b/ },
   { intent: 'best_campaign_cpl', name: 'best-campaign', test: /\b(best|strongest|top|most efficient|cheapest|lowest cpl|lowest cost|lowest cost per lead)\b.*\b(campaigns?|cpl)\b|\bcampaigns?\b.*\b(best|cpl|cheapest|efficient|lowest cost|cost per lead)\b/ },
   { intent: 'sales_by_source', name: 'sales-by-source', test: /\b(sales|orders|revenue)\b.*\b(source|sources|channel|by source)\b|\b(source|sources|channel)\b.*\b(sales|orders|revenue)\b|\bby source\b/ },
-  { intent: 'lead_trend', name: 'lead-trend', test: /\b(lead|leads)\b.*\b(trend|trending|volume|over time|growing|growth|declin\w*|going)\b|\btrend\b.*\bleads?\b/ },
+  { intent: 'lead_trend', name: 'lead-trend', test: /\b(lead|leads)\b.*\b(trend|trending|volume|over time|growing|growth|declin\w*|going)\b|\btrend\b.*\bleads?\b|\b(week over week|week-over-week|wow|weekly|by week|per week|each week|week by week)\b/ },
   { intent: 'data_quality', name: 'data-quality', test: /\b(data quality|missing (data|days?)|data issues?|data gaps?|sync|stale data|incomplete|data problems?|data coverage)\b|\bany issues\b/ },
   { intent: 'spend_summary', name: 'summary', test: /\b(summar\w*|overview|spend|spent|how much|performance|kpis?|totals?|how are we doing|leads|cpl|ctr|cpc)\b/ },
 ];
